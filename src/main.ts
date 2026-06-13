@@ -15,7 +15,13 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 const DASHBOARD_PASSWORD = import.meta.env.VITE_DASHBOARD_PASSWORD as string;
 const AUTH_KEY = 'bar-dash-ok';
 
-type Row = { id: number; name: string; rev: number; qty: number; mrev: number; mqty: number };
+type Row = {
+  id: number; name: string;
+  rev: number; qty: number; mrev: number; mqty: number;   // beer today/month (kept)
+  food: number; snacks: number; other: number;            // today by group
+  foodM: number; snacksM: number; otherM: number;         // month by group
+  total: number; totalM: number;                          // all groups
+};
 const rows = new Map<number, Row>();
 let lastUpdate: Date | null = null;
 
@@ -38,11 +44,11 @@ function shell() {
     <section class="hero">
       <div class="hero-row">
         <div class="hero-col">
-          <div class="hero-label mono">Сегодня · пиво и сидр</div>
+          <div class="hero-label mono">Сегодня · вся выручка</div>
           <div class="hero-num"><span id="total">0</span><i>₽</i></div>
         </div>
         <div class="hero-col hero-col-month">
-          <div class="hero-label mono">С начала месяца</div>
+          <div class="hero-label mono">С начала месяца · вся</div>
           <div class="hero-num hero-num-sm"><span id="totalMonth">0</span><i>₽</i></div>
         </div>
       </div>
@@ -67,31 +73,53 @@ function todayLabel() {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+function mapRow(r: any): Row {
+  return {
+    id: r.location_id, name: r.location_name,
+    rev: Number(r.beer_revenue), qty: Number(r.beer_qty),
+    mrev: Number(r.month_revenue), mqty: Number(r.month_qty),
+    food: Number(r.food_revenue), snacks: Number(r.snacks_revenue), other: Number(r.other_revenue),
+    foodM: Number(r.food_month), snacksM: Number(r.snacks_month), otherM: Number(r.other_month),
+    total: Number(r.total_revenue), totalM: Number(r.total_month),
+  };
+}
+
 function paint(bumpId?: number) {
-  const sorted = [...rows.values()].sort((a, b) => b.mrev - a.mrev);
-  const total = sorted.reduce((s, r) => s + (r.rev || 0), 0);
-  const totalMonth = sorted.reduce((s, r) => s + (r.mrev || 0), 0);
-  const max = sorted.reduce((m, r) => Math.max(m, r.mrev || 0), 0) || 1;
+  const sorted = [...rows.values()].sort((a, b) => b.totalM - a.totalM);
+  const total = sorted.reduce((s, r) => s + (r.total || 0), 0);
+  const totalMonth = sorted.reduce((s, r) => s + (r.totalM || 0), 0);
+  const max = sorted.reduce((m, r) => Math.max(m, r.totalM || 0), 0) || 1;
 
   document.getElementById('total')!.textContent = rub.format(Math.round(total));
   document.getElementById('totalMonth')!.textContent = rub.format(Math.round(totalMonth));
 
   const cards = document.getElementById('cards')!;
   cards.innerHTML = sorted.map((r, i) => {
-    const pct = Math.max(3, Math.round((r.mrev / max) * 100));
-    const lead = i === 0 && r.mrev > 0 ? ' lead' : '';
+    const pct = Math.max(3, Math.round((r.totalM / max) * 100));
+    const lead = i === 0 && r.totalM > 0 ? ' lead' : '';
     const bump = r.id === bumpId ? ' bump' : '';
+    const seg = (val: number, cls: string) => {
+      const w = r.totalM > 0 ? Math.round((val / r.totalM) * 100) : 0;
+      return w > 0 ? `<span class="seg seg-${cls}" style="width:${w}%"></span>` : '';
+    };
     return `
       <article class="card${lead}${bump}" data-id="${r.id}">
         <div class="card-top">
           <span class="rank mono">${String(i + 1).padStart(2, '0')}</span>
           <span class="name">${r.name}</span>
         </div>
-        <div class="amount">${rub.format(Math.round(r.rev))}<i>₽</i><em class="amount-tag mono">сегодня</em></div>
-        <div class="rail"><span style="width:${pct}%"></span></div>
+        <div class="amount">${rub.format(Math.round(r.total))}<i>₽</i><em class="amount-tag mono">сегодня</em></div>
+        <div class="rail rail-stack">
+          ${seg(r.mrev, 'beer')}${seg(r.foodM, 'food')}${seg(r.snacksM, 'snacks')}${seg(r.otherM, 'other')}
+        </div>
         <div class="card-month">
-          <span class="card-month-val">${rub.format(Math.round(r.mrev))} ₽</span>
-          <span class="card-month-lbl mono">за месяц · ${rub.format(Math.round(r.mqty))} бут.</span>
+          <span class="card-month-val">${rub.format(Math.round(r.totalM))} ₽</span>
+          <span class="card-month-lbl mono">за месяц · всё</span>
+        </div>
+        <div class="legend mono">
+          <span><i class="dot dot-beer"></i>пиво ${rub.format(Math.round(r.mrev))}</span>
+          <span><i class="dot dot-food"></i>еда ${rub.format(Math.round(r.foodM))}</span>
+          <span><i class="dot dot-snacks"></i>закуски ${rub.format(Math.round(r.snacksM))}</span>
         </div>
       </article>`;
   }).join('');
@@ -117,15 +145,9 @@ function fatal(msg: string) {
 async function load(client: SupabaseClient) {
   const { data, error } = await client
     .from('live_revenue_today')
-    .select('location_id, location_name, beer_revenue, beer_qty, month_revenue, month_qty');
+    .select('location_id, location_name, beer_revenue, beer_qty, month_revenue, month_qty, food_revenue, snacks_revenue, other_revenue, beer_month, food_month, snacks_month, other_month, total_revenue, total_month');
   if (error) throw error;
-  for (const r of data ?? []) {
-    rows.set(r.location_id, {
-      id: r.location_id, name: r.location_name,
-      rev: Number(r.beer_revenue), qty: Number(r.beer_qty),
-      mrev: Number(r.month_revenue), mqty: Number(r.month_qty),
-    });
-  }
+  for (const r of data ?? []) rows.set(r.location_id, mapRow(r));
   lastUpdate = new Date();
 }
 
@@ -157,11 +179,7 @@ async function startDashboard() {
       (payload: any) => {
         const r = payload.new;
         if (!r || r.location_id == null) return;
-        rows.set(r.location_id, {
-          id: r.location_id, name: r.location_name,
-          rev: Number(r.beer_revenue), qty: Number(r.beer_qty),
-          mrev: Number(r.month_revenue), mqty: Number(r.month_qty),
-        });
+        rows.set(r.location_id, mapRow(r));
         lastUpdate = new Date();
         paint(r.location_id);
         tickFoot();
