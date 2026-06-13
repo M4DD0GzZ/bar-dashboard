@@ -4,13 +4,16 @@ import './style.css';
 /**
  * Live bar-revenue monitor.
  * Reads the `live_revenue_today` vitrine (3 rows) and subscribes to Supabase
- * Realtime. Access is protected at the platform level by Vercel Authentication,
- * so there is no in-app password. The anon key comes from a build-time env var
- * (VITE_SUPABASE_ANON_KEY) and is safe in the browser — RLS exposes only the vitrine.
+ * Realtime. A shared password (VITE_DASHBOARD_PASSWORD) gates the app: until it
+ * is entered correctly the Supabase client is never created, so no data is
+ * fetched. The anon key is a build-time env var and is safe in the browser —
+ * RLS exposes only the vitrine. Password lives in a Vercel env var, not in code.
  */
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+const DASHBOARD_PASSWORD = import.meta.env.VITE_DASHBOARD_PASSWORD as string;
+const AUTH_KEY = 'bar-dash-ok';
 
 type Row = { id: number; name: string; rev: number; qty: number };
 const rows = new Map<number, Row>();
@@ -112,7 +115,7 @@ async function load(client: SupabaseClient) {
   lastUpdate = new Date();
 }
 
-async function main() {
+async function startDashboard() {
   shell();
   document.getElementById('today')!.textContent = todayLabel();
 
@@ -162,4 +165,39 @@ async function main() {
   setInterval(tickFoot, 1000);
 }
 
-main();
+function gate() {
+  // already unlocked this session?
+  if (sessionStorage.getItem(AUTH_KEY) === '1') { startDashboard(); return; }
+  // no password configured → run open (avoids accidental lockout)
+  if (!DASHBOARD_PASSWORD) { startDashboard(); return; }
+
+  app.innerHTML = `
+    <div class="lock">
+      <form class="lock-card" id="lockForm">
+        <div class="lock-mark"></div>
+        <div class="lock-title">Выручка баров</div>
+        <div class="lock-sub mono">введите пароль для доступа</div>
+        <input id="pw" class="lock-input" type="password" autocomplete="current-password"
+               placeholder="пароль" autofocus />
+        <button class="lock-btn" type="submit">Войти</button>
+        <div class="lock-err mono" id="lockErr"></div>
+      </form>
+    </div>`;
+
+  const form = document.getElementById('lockForm') as HTMLFormElement;
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const val = (document.getElementById('pw') as HTMLInputElement).value;
+    if (val === DASHBOARD_PASSWORD) {
+      sessionStorage.setItem(AUTH_KEY, '1');
+      startDashboard();
+    } else {
+      const err = document.getElementById('lockErr')!;
+      err.textContent = 'неверный пароль';
+      const card = document.querySelector('.lock-card')!;
+      card.classList.remove('shake'); void (card as HTMLElement).offsetWidth; card.classList.add('shake');
+    }
+  });
+}
+
+gate();
