@@ -15,7 +15,7 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 const DASHBOARD_PASSWORD = import.meta.env.VITE_DASHBOARD_PASSWORD as string;
 const AUTH_KEY = 'bar-dash-ok';
 
-type Row = { id: number; name: string; rev: number; qty: number };
+type Row = { id: number; name: string; rev: number; qty: number; mrev: number; mqty: number };
 const rows = new Map<number, Row>();
 let lastUpdate: Date | null = null;
 
@@ -36,8 +36,16 @@ function shell() {
     </header>
 
     <section class="hero">
-      <div class="hero-label mono">Итого · пиво и сидр</div>
-      <div class="hero-num"><span id="total">0</span><i>₽</i></div>
+      <div class="hero-row">
+        <div class="hero-col">
+          <div class="hero-label mono">Сегодня · пиво и сидр</div>
+          <div class="hero-num"><span id="total">0</span><i>₽</i></div>
+        </div>
+        <div class="hero-col hero-col-month">
+          <div class="hero-label mono">С начала месяца</div>
+          <div class="hero-num hero-num-sm"><span id="totalMonth">0</span><i>₽</i></div>
+        </div>
+      </div>
       <div class="hero-foot mono" id="heroFoot">—</div>
     </section>
 
@@ -60,16 +68,18 @@ function todayLabel() {
 }
 
 function paint(bumpId?: number) {
-  const sorted = [...rows.values()].sort((a, b) => b.rev - a.rev);
+  const sorted = [...rows.values()].sort((a, b) => b.mrev - a.mrev);
   const total = sorted.reduce((s, r) => s + (r.rev || 0), 0);
-  const max = sorted.reduce((m, r) => Math.max(m, r.rev || 0), 0) || 1;
+  const totalMonth = sorted.reduce((s, r) => s + (r.mrev || 0), 0);
+  const max = sorted.reduce((m, r) => Math.max(m, r.mrev || 0), 0) || 1;
 
   document.getElementById('total')!.textContent = rub.format(Math.round(total));
+  document.getElementById('totalMonth')!.textContent = rub.format(Math.round(totalMonth));
 
   const cards = document.getElementById('cards')!;
   cards.innerHTML = sorted.map((r, i) => {
-    const pct = Math.max(3, Math.round((r.rev / max) * 100));
-    const lead = i === 0 && r.rev > 0 ? ' lead' : '';
+    const pct = Math.max(3, Math.round((r.mrev / max) * 100));
+    const lead = i === 0 && r.mrev > 0 ? ' lead' : '';
     const bump = r.id === bumpId ? ' bump' : '';
     return `
       <article class="card${lead}${bump}" data-id="${r.id}">
@@ -77,15 +87,18 @@ function paint(bumpId?: number) {
           <span class="rank mono">${String(i + 1).padStart(2, '0')}</span>
           <span class="name">${r.name}</span>
         </div>
-        <div class="amount">${rub.format(Math.round(r.rev))}<i>₽</i></div>
+        <div class="amount">${rub.format(Math.round(r.rev))}<i>₽</i><em class="amount-tag mono">сегодня</em></div>
         <div class="rail"><span style="width:${pct}%"></span></div>
-        <div class="card-foot mono">${rub.format(Math.round(r.qty))} бут.</div>
+        <div class="card-month">
+          <span class="card-month-val">${rub.format(Math.round(r.mrev))} ₽</span>
+          <span class="card-month-lbl mono">за месяц · ${rub.format(Math.round(r.mqty))} бут.</span>
+        </div>
       </article>`;
   }).join('');
 
   const hf = document.getElementById('heroFoot')!;
   hf.textContent = sorted.length
-    ? `${sorted.length} бара · лидер ${sorted[0].name}`
+    ? `${sorted.length} бара · лидер месяца ${sorted[0].name}`
     : 'нет данных';
 }
 
@@ -104,12 +117,13 @@ function fatal(msg: string) {
 async function load(client: SupabaseClient) {
   const { data, error } = await client
     .from('live_revenue_today')
-    .select('location_id, location_name, beer_revenue, beer_qty');
+    .select('location_id, location_name, beer_revenue, beer_qty, month_revenue, month_qty');
   if (error) throw error;
   for (const r of data ?? []) {
     rows.set(r.location_id, {
       id: r.location_id, name: r.location_name,
       rev: Number(r.beer_revenue), qty: Number(r.beer_qty),
+      mrev: Number(r.month_revenue), mqty: Number(r.month_qty),
     });
   }
   lastUpdate = new Date();
@@ -146,6 +160,7 @@ async function startDashboard() {
         rows.set(r.location_id, {
           id: r.location_id, name: r.location_name,
           rev: Number(r.beer_revenue), qty: Number(r.beer_qty),
+          mrev: Number(r.month_revenue), mqty: Number(r.month_qty),
         });
         lastUpdate = new Date();
         paint(r.location_id);
@@ -193,7 +208,8 @@ function gate() {
       startDashboard();
     } else {
       const err = document.getElementById('lockErr')!;
-      err.textContent = 'неверный пароль';
+      const exp = (DASHBOARD_PASSWORD ?? '').length;
+      err.textContent = `неверный пароль (введено ${val.length} · ожидается ${exp})`;
       const card = document.querySelector('.lock-card')!;
       card.classList.remove('shake'); void (card as HTMLElement).offsetWidth; card.classList.add('shake');
     }

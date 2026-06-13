@@ -156,3 +156,21 @@ body {
   40%,80% { transform: translateX(7px); }
 }
 @media (prefers-reduced-motion: reduce) { .lock-card.shake { animation: none; } }
+
+/* ---- hero: two metrics (today + month) ---- */
+.hero-row { display: flex; gap: 36px; flex-wrap: wrap; align-items: flex-end; }
+.hero-col { display: flex; flex-direction: column; }
+.hero-col-month { padding-left: 36px; border-left: 1px solid var(--edge); }
+.hero-num-sm { font-size: clamp(34px, 7vw, 56px); color: var(--ink-dim); }
+.hero-num-sm i { color: var(--ink-faint); }
+@media (max-width: 540px) {
+  .hero-col-month { padding-left: 0; border-left: none; padding-top: 14px;
+    border-top: 1px solid var(--edge); width: 100%; }
+}
+
+/* ---- card: today amount tag + month block ---- */
+.amount-tag { font-style: normal; font-size: 11px; color: var(--ink-faint);
+  letter-spacing: .5px; margin-left: 10px; vertical-align: middle; }
+.card-month { margin-top: 12px; display: flex; flex-direction: column; gap: 2px; }
+.card-month-val { font-size: 19px; font-weight: 700; color: var(--ink); letter-spacing: -.3px; }
+.card-month-lbl { font-size: 11.5px; color: var(--ink-dim); letter-spacing: .3px; }
