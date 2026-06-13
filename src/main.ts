@@ -73,13 +73,15 @@ function todayLabel() {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function grpRow(cls: string, label: string, today: number, month: number): string {
+function grpRow(cls: string, label: string, today: number, month: number, totalDay: number, totalMonth: number): string {
+  const pctD = totalDay > 0 ? Math.round((today / totalDay) * 100) : 0;
+  const pctM = totalMonth > 0 ? Math.round((month / totalMonth) * 100) : 0;
   return `
     <div class="grp">
       <span class="grp-head"><i class="dot dot-${cls}"></i>${label}</span>
       <span class="grp-nums">
-        <span class="grp-today">${rub.format(Math.round(today))} ₽</span>
-        <span class="grp-month mono">${rub.format(Math.round(month))} ₽ / мес</span>
+        <span class="grp-today">${rub.format(Math.round(today))} ₽ <em class="grp-pct">${pctD}%</em></span>
+        <span class="grp-month mono">${rub.format(Math.round(month))} ₽ / мес · ${pctM}%</span>
       </span>
     </div>`;
 }
@@ -128,9 +130,9 @@ function paint(bumpId?: number) {
           <span class="card-month-lbl mono">за месяц · всё</span>
         </div>
         <div class="groups">
-          ${grpRow('beer', 'Пиво и сидр', r.rev, r.mrev)}
-          ${grpRow('food', 'Еда', r.food, r.foodM)}
-          ${grpRow('snacks', 'Закуски', r.snacks, r.snacksM)}
+          ${grpRow('beer', 'Пиво и сидр', r.rev, r.mrev, r.total, r.totalM)}
+          ${grpRow('food', 'Еда', r.food, r.foodM, r.total, r.totalM)}
+          ${grpRow('snacks', 'Закуски', r.snacks, r.snacksM, r.total, r.totalM)}
         </div>
       </article>`;
   }).join('');
