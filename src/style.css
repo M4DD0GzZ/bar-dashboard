@@ -206,3 +206,12 @@ body {
 /* ---- group share percentage ---- */
 .grp-pct { font-style: normal; font-size: 13px; font-weight: 600;
   color: var(--amber); margin-left: 4px; }
+
+/* ---- year-over-year badges ---- */
+.card-yoy { margin-top: 6px; }
+.yoy { font-style: normal; font-size: 12px; font-weight: 600;
+  letter-spacing: .2px; font-variant-numeric: tabular-nums; }
+.yoy-up   { color: var(--grow); }
+.yoy-down { color: #ff6b6b; }
+.yoy-flat { color: var(--ink-faint); font-weight: 500; }
+.hero-foot .yoy { font-size: 12.5px; }

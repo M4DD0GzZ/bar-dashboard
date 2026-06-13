@@ -21,6 +21,8 @@ type Row = {
   food: number; snacks: number; other: number;            // today by group
   foodM: number; snacksM: number; otherM: number;         // month by group
   total: number; totalM: number;                          // all groups
+  totalYa: number; totalMYa: number;                      // year-ago: same day / MTD
+  yaDate: string | null;                                  // the year-ago date compared
 };
 const rows = new Map<number, Row>();
 let lastUpdate: Date | null = null;
@@ -94,13 +96,28 @@ function mapRow(r: any): Row {
     food: Number(r.food_revenue), snacks: Number(r.snacks_revenue), other: Number(r.other_revenue),
     foodM: Number(r.food_month), snacksM: Number(r.snacks_month), otherM: Number(r.other_month),
     total: Number(r.total_revenue), totalM: Number(r.total_month),
+    totalYa: Number(r.total_revenue_ya ?? 0), totalMYa: Number(r.total_month_ya ?? 0),
+    yaDate: r.ya_date ?? null,
   };
+}
+
+function yoyBadge(now: number, ya: number): string {
+  // no comparable history (e.g. bar not yet open a year ago)
+  if (!ya || ya <= 0) return `<em class="yoy yoy-flat mono">нет данных год назад</em>`;
+  const pct = Math.round(((now - ya) / ya) * 100);
+  const cls = pct > 0 ? 'yoy-up' : pct < 0 ? 'yoy-down' : 'yoy-flat';
+  const arrow = pct > 0 ? '▲' : pct < 0 ? '▼' : '·';
+  const sign = pct > 0 ? '+' : '';
+  return `<em class="yoy ${cls} mono">${arrow} ${sign}${pct}% · ${rub.format(Math.round(ya))} ₽ год назад</em>`;
 }
 
 function paint(bumpId?: number) {
   const sorted = [...rows.values()].sort((a, b) => b.totalM - a.totalM);
   const total = sorted.reduce((s, r) => s + (r.total || 0), 0);
   const totalMonth = sorted.reduce((s, r) => s + (r.totalM || 0), 0);
+  // YoY only across bars that have comparable history (ya MTD > 0)
+  const totalMonthYa = sorted.reduce((s, r) => s + (r.totalMYa > 0 ? r.totalMYa : 0), 0);
+  const totalMonthCmp = sorted.reduce((s, r) => s + (r.totalMYa > 0 ? r.totalM : 0), 0);
   const max = sorted.reduce((m, r) => Math.max(m, r.totalM || 0), 0) || 1;
 
   document.getElementById('total')!.textContent = rub.format(Math.round(total));
@@ -129,6 +146,7 @@ function paint(bumpId?: number) {
           <span class="card-month-val">${rub.format(Math.round(r.totalM))} ₽</span>
           <span class="card-month-lbl mono">за месяц · всё</span>
         </div>
+        <div class="card-yoy">${yoyBadge(r.totalM, r.totalMYa)}</div>
         <div class="groups">
           ${grpRow('beer', 'Пиво и сидр', r.rev, r.mrev, r.total, r.totalM)}
           ${grpRow('food', 'Еда', r.food, r.foodM, r.total, r.totalM)}
@@ -138,9 +156,14 @@ function paint(bumpId?: number) {
   }).join('');
 
   const hf = document.getElementById('heroFoot')!;
-  hf.textContent = sorted.length
-    ? `${sorted.length} бара · лидер месяца ${sorted[0].name}`
-    : 'нет данных';
+  if (sorted.length) {
+    const badge = totalMonthYa > 0
+      ? yoyBadge(totalMonthCmp, totalMonthYa)
+      : '';
+    hf.innerHTML = `${sorted.length} бара · лидер месяца ${sorted[0].name}${badge ? ' · ' + badge : ''}`;
+  } else {
+    hf.textContent = 'нет данных';
+  }
 }
 
 function tickFoot() {
@@ -158,7 +181,7 @@ function fatal(msg: string) {
 async function load(client: SupabaseClient) {
   const { data, error } = await client
     .from('live_revenue_today')
-    .select('location_id, location_name, beer_revenue, beer_qty, month_revenue, month_qty, food_revenue, snacks_revenue, other_revenue, beer_month, food_month, snacks_month, other_month, total_revenue, total_month');
+    .select('location_id, location_name, beer_revenue, beer_qty, month_revenue, month_qty, food_revenue, snacks_revenue, other_revenue, beer_month, food_month, snacks_month, other_month, total_revenue, total_month, total_revenue_ya, total_month_ya, ya_date');
   if (error) throw error;
   for (const r of data ?? []) rows.set(r.location_id, mapRow(r));
   lastUpdate = new Date();
@@ -239,8 +262,7 @@ function gate() {
       startDashboard();
     } else {
       const err = document.getElementById('lockErr')!;
-      const exp = (DASHBOARD_PASSWORD ?? '').length;
-      err.textContent = `неверный пароль (введено ${val.length} · ожидается ${exp})`;
+      err.textContent = 'неверный пароль';
       const card = document.querySelector('.lock-card')!;
       card.classList.remove('shake'); void (card as HTMLElement).offsetWidth; card.classList.add('shake');
     }
