@@ -191,3 +191,14 @@ body {
 .dot-beer   { background: var(--amber); }
 .dot-food   { background: #2a6df0; }
 .dot-snacks { background: #46e0a0; }
+
+/* ---- group rows (vertical, larger) ---- */
+.groups { margin-top: 16px; display: flex; flex-direction: column; gap: 12px; }
+.grp { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.grp-head { display: inline-flex; align-items: center; gap: 8px;
+  font-size: 15px; font-weight: 600; color: var(--ink); }
+.grp-head .dot { width: 11px; height: 11px; border-radius: 3px; }
+.grp-nums { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.grp-today { font-size: 22px; font-weight: 800; color: var(--ink);
+  letter-spacing: -.4px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.grp-month { font-size: 12.5px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }

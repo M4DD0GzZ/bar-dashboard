@@ -73,6 +73,17 @@ function todayLabel() {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+function grpRow(cls: string, label: string, today: number, month: number): string {
+  return `
+    <div class="grp">
+      <span class="grp-head"><i class="dot dot-${cls}"></i>${label}</span>
+      <span class="grp-nums">
+        <span class="grp-today">${rub.format(Math.round(today))} ₽</span>
+        <span class="grp-month mono">${rub.format(Math.round(month))} ₽ / мес</span>
+      </span>
+    </div>`;
+}
+
 function mapRow(r: any): Row {
   return {
     id: r.location_id, name: r.location_name,
@@ -116,10 +127,10 @@ function paint(bumpId?: number) {
           <span class="card-month-val">${rub.format(Math.round(r.totalM))} ₽</span>
           <span class="card-month-lbl mono">за месяц · всё</span>
         </div>
-        <div class="legend mono">
-          <span><i class="dot dot-beer"></i>пиво ${rub.format(Math.round(r.mrev))}</span>
-          <span><i class="dot dot-food"></i>еда ${rub.format(Math.round(r.foodM))}</span>
-          <span><i class="dot dot-snacks"></i>закуски ${rub.format(Math.round(r.snacksM))}</span>
+        <div class="groups">
+          ${grpRow('beer', 'Пиво и сидр', r.rev, r.mrev)}
+          ${grpRow('food', 'Еда', r.food, r.foodM)}
+          ${grpRow('snacks', 'Закуски', r.snacks, r.snacksM)}
         </div>
       </article>`;
   }).join('');
