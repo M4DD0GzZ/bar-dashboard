@@ -350,8 +350,7 @@ async function loadAbc() {
 
 // одна таблица товаров одного бара в одной группе
 function abcTable(grp: string, rows: AbcRow[]): string {
-  const head = `<div class="abc-cell-head"><i class="dot dot-${grp}"></i><span>${GRP_LABEL[grp]}</span></div>`;
-  if (!rows.length) return `${head}<div class="abc-hint mono">нет данных</div>`;
+  if (!rows.length) return `<div class="abc-hint mono">нет данных</div>`;
   const counts = { A: 0, B: 0, C: 0 } as Record<string, number>;
   rows.forEach((r) => { counts[r.abc] = (counts[r.abc] || 0) + 1; });
   const total = rows.reduce((s, r) => s + r.revenue, 0);
@@ -364,7 +363,6 @@ function abcTable(grp: string, rows: AbcRow[]): string {
       <td class="abc-cum mono">${r.cum_pct}%</td>
     </tr>`).join('');
   return `
-    ${head}
     <div class="abc-cell-sum mono">${rub.format(Math.round(total))} ₽ · A:${counts.A} B:${counts.B} C:${counts.C}</div>
     <table class="abc-table">
       <thead><tr><th></th><th>Товар</th><th class="mono">шт</th><th class="mono">выручка</th><th class="mono">накоп.</th></tr></thead>
@@ -388,7 +386,11 @@ function renderAbcGrid(rowsByBar: AbcRow[][]): string {
       const items = rows.filter((r) => r.grp === g);
       return `<div class="abc-cell" data-bar="${BARS[bi].name}">${abcTable(g, items)}</div>`;
     }).join('');
-    return `<div class="abc-grid-row">${cells}</div>`;
+    return `
+      <div class="abc-group">
+        <div class="abc-group-head"><i class="dot dot-${g}"></i><span>${GRP_LABEL[g]}</span></div>
+        <div class="abc-grid-row">${cells}</div>
+      </div>`;
   }).join('');
 
   return `<div class="abc-grid">${head}${groupRows}</div>`;
