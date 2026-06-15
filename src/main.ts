@@ -59,6 +59,7 @@ function shell() {
           <div class="hero-label mono">С начала года · вся</div>
           <div class="hero-num hero-num-sm"><span id="totalYtd">0</span><i>₽</i></div>
           <div class="hero-yoy" id="yearYoy"></div>
+          <div class="hero-split" id="yearSplit"></div>
         </div>
       </div>
       <div class="hero-foot mono" id="heroFoot">—</div>
@@ -130,6 +131,9 @@ function paint(bumpId?: number) {
   // same for the year (YTD): only bars with comparable history a year ago
   const totalYtdYa = sorted.reduce((s, r) => s + (r.totalYtdYa > 0 ? r.totalYtdYa : 0), 0);
   const totalYtdCmp = sorted.reduce((s, r) => s + (r.totalYtdYa > 0 ? r.totalYtd : 0), 0);
+  // YTD by legal entity: Хоп Сити Барс = Шоссе(1)+Строгино(2), Хоп Сити Концепт = Флакон(3)
+  const ytdBars = sorted.reduce((s, r) => s + (r.id === 1 || r.id === 2 ? r.totalYtd : 0), 0);
+  const ytdConcept = sorted.reduce((s, r) => s + (r.id === 3 ? r.totalYtd : 0), 0);
   const max = sorted.reduce((m, r) => Math.max(m, r.totalM || 0), 0) || 1;
 
   document.getElementById('total')!.textContent = rub.format(Math.round(total));
@@ -178,6 +182,10 @@ function paint(bumpId?: number) {
   const yearYoyEl = document.getElementById('yearYoy')!;
   monthYoyEl.innerHTML = totalMonthYa > 0 ? yoyBadge(totalMonthCmp, totalMonthYa, 'в этом месяце год назад') : '';
   yearYoyEl.innerHTML = totalYtdYa > 0 ? yoyBadge(totalYtdCmp, totalYtdYa, 'за тот же период год назад') : '';
+  const yearSplitEl = document.getElementById('yearSplit')!;
+  yearSplitEl.innerHTML =
+    `<span class="split-row"><span class="split-name">Хоп Сити Барс</span><span class="split-val mono">${rub.format(Math.round(ytdBars))} ₽</span></span>` +
+    `<span class="split-row"><span class="split-name">Хоп Сити Концепт</span><span class="split-val mono">${rub.format(Math.round(ytdConcept))} ₽</span></span>`;
   if (sorted.length) {
     hf.innerHTML = `${sorted.length} бара · лидер месяца ${sorted[0].name}`;
   } else {

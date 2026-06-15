@@ -232,3 +232,11 @@ body {
 /* ---- hero YoY badges (under month / year metrics) ---- */
 .hero-yoy { margin-top: 8px; min-height: 16px; }
 .hero-yoy .yoy { font-size: 12.5px; }
+
+/* ---- hero: revenue split by legal entity ---- */
+.hero-split { margin-top: 12px; display: flex; flex-direction: column; gap: 5px; }
+.split-row { display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px; max-width: 320px; }
+.split-name { color: var(--ink-dim); font-size: 12.5px; letter-spacing: .2px; }
+.split-val { color: var(--ink); font-size: 13.5px; font-weight: 600;
+  font-variant-numeric: tabular-nums; }
