@@ -92,7 +92,10 @@ function shell() {
     <div id="tab-taps" class="tab-panel" hidden>
       <div class="taps-controls">
         <div class="taps-bars" id="tapsBars"></div>
-        <button class="taps-add-btn" id="tapsAddBtn">+ Подключить кегу</button>
+        <div class="taps-actions">
+          <button class="taps-chz-btn" id="tapsChzBtn">Документ ЧЗ за день</button>
+          <button class="taps-add-btn" id="tapsAddBtn">+ Подключить кегу</button>
+        </div>
       </div>
       <div class="taps-body" id="tapsBody"><div class="abc-hint mono">загрузка…</div></div>
     </div>
@@ -347,6 +350,7 @@ function initTapsTab() {
     });
   });
   document.getElementById('tapsAddBtn')!.addEventListener('click', () => openKegForm());
+  document.getElementById('tapsChzBtn')!.addEventListener('click', () => exportChz());
 }
 
 async function loadTaps() {
@@ -533,6 +537,37 @@ async function detachKeg(tapNo: number) {
   if (!confirm(`Снять кегу с крана ${tapNo}?`)) return;
   const { error } = await abcClient.rpc('keg_detach', { p_location: tapsBar, p_tap: tapNo });
   if (!error) loadTaps();
+}
+
+// Выгрузка документа «Подключение кега» для Честного Знака:
+// xlsx с одной колонкой — коды маркировки (CIS) подключённых за день кег.
+async function exportChz() {
+  if (!abcClient) return;
+  const btn = document.getElementById('tapsChzBtn') as HTMLButtonElement;
+  const prev = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Готовлю…';
+  try {
+    const { data, error } = await abcClient.rpc('chz_codes_for_day', { p_location: tapsBar });
+    if (error) { alert('Ошибка выгрузки: ' + error.message); return; }
+    const rows = (data ?? []) as { cis: string }[];
+    const codes = rows.map((r) => r.cis).filter(Boolean);
+    if (!codes.length) { alert('За сегодня нет кег с кодом маркировки для этого бара.'); return; }
+
+    // динамически подгружаем SheetJS из CDN (без постоянной зависимости)
+    const XLSX = await import(/* @vite-ignore */ 'https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs');
+    // одна колонка, без заголовка — как в шаблоне ЧЗ
+    const aoa = codes.map((c) => [c]);
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Шаблон');
+    const today = new Date().toLocaleDateString('ru-RU').replace(/\./g, '-');
+    const barName = BAR_NAME[tapsBar].replace(/\s+/g, '_');
+    XLSX.writeFile(wb, `Подключение_кег_${barName}_${today}.xlsx`);
+  } catch (e: any) {
+    alert('Не удалось сформировать файл: ' + (e?.message ?? e));
+  } finally {
+    btn.disabled = false; btn.textContent = prev;
+  }
 }
 
 function initTabs(client: SupabaseClient) {
