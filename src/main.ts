@@ -46,7 +46,7 @@ function shell() {
 
     <nav class="tabs" id="tabs">
       <button class="tab tab-active" data-tab="revenue">Выручка за смену</button>
-      <button class="tab" data-tab="abc">ABC-анализ</button>
+      <button class="tab" data-tab="reports">Отчёты</button>
       <button class="tab" data-tab="taps">Краны</button>
       <button class="tab" data-tab="logs">Логи <span class="tab-badge" id="logsBadge" hidden>0</span></button>
     </nav>
@@ -79,14 +79,20 @@ function shell() {
       <footer class="foot mono" id="foot"></footer>
     </div>
 
-    <div id="tab-abc" class="tab-panel" hidden>
-      <div class="abc-controls">
-        <div class="abc-period" id="abcPeriod">
-          <button class="seg-btn seg-active" data-period="month">Текущий месяц</button>
-          <button class="seg-btn" data-period="ytd">С начала года</button>
-        </div>
+    <div id="tab-reports" class="tab-panel" hidden>
+      <div class="reports-subnav" id="reportsSubnav">
+        <button class="report-tab report-tab-active" data-report="abc">ABC-анализ</button>
       </div>
-      <div class="abc-body" id="abcBody"><div class="abc-hint mono">загрузка…</div></div>
+
+      <div id="report-abc" class="report-panel">
+        <div class="abc-controls">
+          <div class="abc-period" id="abcPeriod">
+            <button class="seg-btn seg-active" data-period="month">Текущий месяц</button>
+            <button class="seg-btn" data-period="ytd">С начала года</button>
+          </div>
+        </div>
+        <div class="abc-body" id="abcBody"><div class="abc-hint mono">загрузка…</div></div>
+      </div>
     </div>
 
     <div id="tab-taps" class="tab-panel" hidden>
@@ -532,10 +538,10 @@ function initTabs(client: SupabaseClient) {
       btn.classList.add('tab-active');
       const which = btn.dataset.tab!;
       document.getElementById('tab-revenue')!.hidden = which !== 'revenue';
-      document.getElementById('tab-abc')!.hidden = which !== 'abc';
+      document.getElementById('tab-reports')!.hidden = which !== 'reports';
       document.getElementById('tab-taps')!.hidden = which !== 'taps';
       document.getElementById('tab-logs')!.hidden = which !== 'logs';
-      if (which === 'abc' && !abcLoaded) loadAbc();
+      if (which === 'reports' && !abcLoaded) loadAbc();
       if (which === 'taps') { if (!tapsInited) initTapsTab(); loadTaps(); }
       if (which === 'logs') loadLogs();
     });

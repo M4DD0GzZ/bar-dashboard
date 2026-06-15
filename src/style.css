@@ -454,3 +454,12 @@ body {
   .swap-row { align-items: flex-start; flex-direction: column; gap: 8px; }
   .swap-nums { flex-wrap: wrap; gap: 10px; }
 }
+
+/* ---- под-меню вкладки «Отчёты» ---- */
+.reports-subnav { display: flex; gap: 6px; margin-bottom: 20px; }
+.report-tab { background: var(--panel); border: 1px solid var(--edge); color: var(--ink-dim);
+  font-family: inherit; font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: 9px;
+  cursor: pointer; transition: color .15s, border-color .15s, background .15s; }
+.report-tab:hover { color: var(--ink); }
+.report-tab-active { color: var(--amber); border-color: var(--amber); background: rgba(245,176,66,.08); }
+.report-panel { /* контейнер под-отчёта */ }
