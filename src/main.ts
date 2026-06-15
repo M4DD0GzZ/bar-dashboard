@@ -21,7 +21,7 @@ type Row = {
   food: number; snacks: number; other: number;            // today by group
   foodM: number; snacksM: number; otherM: number;         // month by group
   total: number; totalM: number;                          // all groups
-  totalYtd: number;                                       // year-to-date (с 1 января)
+  totalYtd: number; totalYtdYa: number;                   // year-to-date now / year-ago
   totalYa: number; totalMYa: number;                      // year-ago: same day / MTD
   yaDate: string | null;                                  // the year-ago date compared
 };
@@ -53,10 +53,12 @@ function shell() {
         <div class="hero-col hero-col-month">
           <div class="hero-label mono">С начала месяца · вся</div>
           <div class="hero-num hero-num-sm"><span id="totalMonth">0</span><i>₽</i></div>
+          <div class="hero-yoy" id="monthYoy"></div>
         </div>
         <div class="hero-col hero-col-year">
           <div class="hero-label mono">С начала года · вся</div>
           <div class="hero-num hero-num-sm"><span id="totalYtd">0</span><i>₽</i></div>
+          <div class="hero-yoy" id="yearYoy"></div>
         </div>
       </div>
       <div class="hero-foot mono" id="heroFoot">—</div>
@@ -101,20 +103,20 @@ function mapRow(r: any): Row {
     food: Number(r.food_revenue), snacks: Number(r.snacks_revenue), other: Number(r.other_revenue),
     foodM: Number(r.food_month), snacksM: Number(r.snacks_month), otherM: Number(r.other_month),
     total: Number(r.total_revenue), totalM: Number(r.total_month),
-    totalYtd: Number(r.total_ytd ?? 0),
+    totalYtd: Number(r.total_ytd ?? 0), totalYtdYa: Number(r.total_ytd_ya ?? 0),
     totalYa: Number(r.total_revenue_ya ?? 0), totalMYa: Number(r.total_month_ya ?? 0),
     yaDate: r.ya_date ?? null,
   };
 }
 
-function yoyBadge(now: number, ya: number): string {
+function yoyBadge(now: number, ya: number, label: string = 'год назад'): string {
   // no comparable history (e.g. bar not yet open a year ago)
   if (!ya || ya <= 0) return `<em class="yoy yoy-flat mono">нет данных год назад</em>`;
   const pct = Math.round(((now - ya) / ya) * 100);
   const cls = pct > 0 ? 'yoy-up' : pct < 0 ? 'yoy-down' : 'yoy-flat';
   const arrow = pct > 0 ? '▲' : pct < 0 ? '▼' : '·';
   const sign = pct > 0 ? '+' : '';
-  return `<em class="yoy ${cls} mono">${arrow} ${sign}${pct}% · ${rub.format(Math.round(ya))} ₽ год назад</em>`;
+  return `<em class="yoy ${cls} mono">${arrow} ${sign}${pct}% · ${rub.format(Math.round(ya))} ₽ ${label}</em>`;
 }
 
 function paint(bumpId?: number) {
@@ -125,6 +127,9 @@ function paint(bumpId?: number) {
   // YoY only across bars that have comparable history (ya MTD > 0)
   const totalMonthYa = sorted.reduce((s, r) => s + (r.totalMYa > 0 ? r.totalMYa : 0), 0);
   const totalMonthCmp = sorted.reduce((s, r) => s + (r.totalMYa > 0 ? r.totalM : 0), 0);
+  // same for the year (YTD): only bars with comparable history a year ago
+  const totalYtdYa = sorted.reduce((s, r) => s + (r.totalYtdYa > 0 ? r.totalYtdYa : 0), 0);
+  const totalYtdCmp = sorted.reduce((s, r) => s + (r.totalYtdYa > 0 ? r.totalYtd : 0), 0);
   const max = sorted.reduce((m, r) => Math.max(m, r.totalM || 0), 0) || 1;
 
   document.getElementById('total')!.textContent = rub.format(Math.round(total));
@@ -154,11 +159,12 @@ function paint(bumpId?: number) {
           <span class="card-month-val">${rub.format(Math.round(r.totalM))} ₽</span>
           <span class="card-month-lbl mono">за месяц · всё</span>
         </div>
+        <div class="card-yoy">${yoyBadge(r.totalM, r.totalMYa, 'в этом месяце год назад')}</div>
         <div class="card-year">
           <span class="card-year-val mono">${rub.format(Math.round(r.totalYtd))} ₽</span>
           <span class="card-year-lbl mono">с начала года</span>
         </div>
-        <div class="card-yoy">${yoyBadge(r.totalM, r.totalMYa)}</div>
+        <div class="card-yoy">${yoyBadge(r.totalYtd, r.totalYtdYa, 'за тот же период год назад')}</div>
         <div class="groups">
           ${grpRow('beer', 'Пиво и сидр', r.rev, r.mrev, r.total, r.totalM)}
           ${grpRow('food', 'Еда', r.food, r.foodM, r.total, r.totalM)}
@@ -168,11 +174,12 @@ function paint(bumpId?: number) {
   }).join('');
 
   const hf = document.getElementById('heroFoot')!;
+  const monthYoyEl = document.getElementById('monthYoy')!;
+  const yearYoyEl = document.getElementById('yearYoy')!;
+  monthYoyEl.innerHTML = totalMonthYa > 0 ? yoyBadge(totalMonthCmp, totalMonthYa, 'в этом месяце год назад') : '';
+  yearYoyEl.innerHTML = totalYtdYa > 0 ? yoyBadge(totalYtdCmp, totalYtdYa, 'за тот же период год назад') : '';
   if (sorted.length) {
-    const badge = totalMonthYa > 0
-      ? yoyBadge(totalMonthCmp, totalMonthYa)
-      : '';
-    hf.innerHTML = `${sorted.length} бара · лидер месяца ${sorted[0].name}${badge ? ' · ' + badge : ''}`;
+    hf.innerHTML = `${sorted.length} бара · лидер месяца ${sorted[0].name}`;
   } else {
     hf.textContent = 'нет данных';
   }
@@ -193,7 +200,7 @@ function fatal(msg: string) {
 async function load(client: SupabaseClient) {
   const { data, error } = await client
     .from('live_revenue_today')
-    .select('location_id, location_name, beer_revenue, beer_qty, month_revenue, month_qty, food_revenue, snacks_revenue, other_revenue, beer_month, food_month, snacks_month, other_month, total_revenue, total_month, total_ytd, total_revenue_ya, total_month_ya, ya_date');
+    .select('location_id, location_name, beer_revenue, beer_qty, month_revenue, month_qty, food_revenue, snacks_revenue, other_revenue, beer_month, food_month, snacks_month, other_month, total_revenue, total_month, total_ytd, total_revenue_ya, total_month_ya, total_ytd_ya, ya_date');
   if (error) throw error;
   for (const r of data ?? []) rows.set(r.location_id, mapRow(r));
   lastUpdate = new Date();
