@@ -357,7 +357,12 @@ async function loadTaps() {
     const { data, error } = await abcClient.rpc('taps_state', { p_location: tapsBar });
     if (error) { body.innerHTML = `<div class="abc-hint mono">ошибка: ${error.message}</div>`; return; }
     const taps = (data ?? []) as TapRow[];
-    body.innerHTML = `<div class="taps-grid">${taps.map(renderTap).join('')}</div>`;
+    body.innerHTML =
+      `<div class="taps-grid">${taps.map(renderTap).join('')}</div>` +
+      `<div class="swaps-section">
+         <div class="swaps-head">Журнал замен · ${BAR_NAME[tapsBar]}</div>
+         <div class="swaps-body" id="swapsBody"><div class="abc-hint mono">загрузка…</div></div>
+       </div>`;
     body.querySelectorAll<HTMLButtonElement>('.tap-action').forEach((btn) => {
       const tapNo = Number(btn.dataset.tap);
       const action = btn.dataset.action;
@@ -366,9 +371,51 @@ async function loadTaps() {
         else if (action === 'detach') detachKeg(tapNo);
       });
     });
+    loadSwaps();
   } catch (e: any) {
     body.innerHTML = `<div class="abc-hint mono">не удалось загрузить краны: ${e?.message ?? e}</div>`;
   }
+}
+
+type SwapRow = {
+  id: number; tap_no: number; product: string; volume_l: number;
+  poured_l: number; remaining_l: number; remaining_pct: number;
+  connected_at: string | null; detached_at: string;
+};
+
+async function loadSwaps() {
+  if (!abcClient) return;
+  const el = document.getElementById('swapsBody');
+  if (!el) return;
+  const { data, error } = await abcClient.rpc('keg_swaps_recent', { p_location: tapsBar, p_limit: 50 });
+  if (error) { el.innerHTML = `<div class="abc-hint mono">ошибка: ${error.message}</div>`; return; }
+  const rows = (data ?? []) as SwapRow[];
+  if (!rows.length) { el.innerHTML = `<div class="abc-hint mono">пока нет замен</div>`; return; }
+  el.innerHTML = rows.map(renderSwap).join('');
+}
+
+function renderSwap(s: SwapRow): string {
+  const pct = Number(s.remaining_pct ?? 0);
+  // чем больше остаток при снятии — тем больше недолив (потери)
+  const heavy = pct >= 30;
+  const mid = pct >= 15 && pct < 30;
+  const cls = heavy ? 'swap-heavy' : mid ? 'swap-mid' : 'swap-ok';
+  return `
+    <div class="swap-row">
+      <div class="swap-main">
+        <span class="swap-tap mono">Кран ${s.tap_no}</span>
+        <span class="swap-product">${s.product}</span>
+      </div>
+      <div class="swap-nums mono">
+        <span class="swap-rem ${cls}">недолив ${fmtL(s.remaining_l)} л · ${pct}%</span>
+        <span class="swap-detail">продано ${fmtL(s.poured_l)} из ${fmtL(s.volume_l)} л</span>
+        <span class="swap-time">${fmtSwapTime(s.detached_at)}</span>
+      </div>
+    </div>`;
+}
+
+function fmtSwapTime(iso: string): string {
+  return new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 function renderTap(t: TapRow): string {

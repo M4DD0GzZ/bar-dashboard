@@ -417,3 +417,24 @@ body {
 .keg-save:hover { opacity: .9; }
 .keg-save:disabled { opacity: .5; cursor: default; }
 .keg-err { color: #ff8a8a; font-size: 12.5px; }
+
+/* ---- журнал замен кег ---- */
+.swaps-section { margin-top: 28px; }
+.swaps-head { font-size: 15px; font-weight: 700; color: var(--ink); margin-bottom: 12px; letter-spacing: .2px; }
+.swaps-body { display: flex; flex-direction: column; gap: 8px; }
+.swap-row { background: var(--panel); border: 1px solid var(--edge-soft); border-radius: 11px;
+  padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.swap-main { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
+.swap-tap { font-size: 12px; font-weight: 700; color: var(--ink-dim); white-space: nowrap; }
+.swap-product { font-size: 14px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.swap-nums { display: flex; align-items: center; gap: 16px; font-size: 12.5px; flex-shrink: 0; }
+.swap-rem { font-weight: 700; }
+.swap-ok { color: var(--grow); }
+.swap-mid { color: var(--amber); }
+.swap-heavy { color: #ff7b7b; }
+.swap-detail { color: var(--ink-faint); }
+.swap-time { color: var(--ink-faint); white-space: nowrap; }
+@media (max-width: 700px) {
+  .swap-row { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .swap-nums { flex-wrap: wrap; gap: 10px; }
+}
