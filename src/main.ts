@@ -47,6 +47,7 @@ function shell() {
     <nav class="tabs" id="tabs">
       <button class="tab tab-active" data-tab="revenue">Выручка за смену</button>
       <button class="tab" data-tab="abc">ABC-анализ</button>
+      <button class="tab" data-tab="taps">Краны</button>
       <button class="tab" data-tab="logs">Логи <span class="tab-badge" id="logsBadge" hidden>0</span></button>
     </nav>
 
@@ -86,6 +87,14 @@ function shell() {
         </div>
       </div>
       <div class="abc-body" id="abcBody"><div class="abc-hint mono">загрузка…</div></div>
+    </div>
+
+    <div id="tab-taps" class="tab-panel" hidden>
+      <div class="taps-controls">
+        <div class="taps-bars" id="tapsBars"></div>
+        <button class="taps-add-btn" id="tapsAddBtn">+ Подключить кегу</button>
+      </div>
+      <div class="taps-body" id="tapsBody"><div class="abc-hint mono">загрузка…</div></div>
     </div>
 
     <div id="tab-logs" class="tab-panel" hidden>
@@ -312,6 +321,158 @@ const BARS: { id: number; name: string }[] = [
 const GRP_LABEL: Record<string, string> = { beer: 'Пиво и сидр', food: 'Еда', snacks: 'Закуски' };
 const GRP_ORDER = ['beer', 'food', 'snacks'];
 
+// ---- Краны ----
+let tapsInited = false;
+let tapsBar = 1;                       // выбранный бар на вкладке
+let tapsProducts: { product: string; total_l: number }[] = [];
+
+type TapRow = {
+  tap_no: number; product: string | null; volume_l: number | null;
+  connected_at: string | null; poured_l: number | null; remaining_l: number | null; pct: number | null;
+};
+
+function initTapsTab() {
+  tapsInited = true;
+  const bars = document.getElementById('tapsBars')!;
+  bars.innerHTML = BARS.map((b) =>
+    `<button class="taps-bar-btn ${b.id === tapsBar ? 'taps-bar-active' : ''}" data-bar="${b.id}">${b.name}</button>`
+  ).join('');
+  bars.querySelectorAll<HTMLButtonElement>('.taps-bar-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      tapsBar = Number(btn.dataset.bar);
+      tapsProducts = [];
+      bars.querySelectorAll('.taps-bar-btn').forEach((b) => b.classList.remove('taps-bar-active'));
+      btn.classList.add('taps-bar-active');
+      loadTaps();
+    });
+  });
+  document.getElementById('tapsAddBtn')!.addEventListener('click', () => openKegForm());
+}
+
+async function loadTaps() {
+  if (!abcClient) return;
+  const body = document.getElementById('tapsBody')!;
+  body.innerHTML = `<div class="abc-hint mono">загрузка…</div>`;
+  try {
+    const { data, error } = await abcClient.rpc('taps_state', { p_location: tapsBar });
+    if (error) { body.innerHTML = `<div class="abc-hint mono">ошибка: ${error.message}</div>`; return; }
+    const taps = (data ?? []) as TapRow[];
+    body.innerHTML = `<div class="taps-grid">${taps.map(renderTap).join('')}</div>`;
+    body.querySelectorAll<HTMLButtonElement>('.tap-action').forEach((btn) => {
+      const tapNo = Number(btn.dataset.tap);
+      const action = btn.dataset.action;
+      btn.addEventListener('click', () => {
+        if (action === 'connect') openKegForm(tapNo);
+        else if (action === 'detach') detachKeg(tapNo);
+      });
+    });
+  } catch (e: any) {
+    body.innerHTML = `<div class="abc-hint mono">не удалось загрузить краны: ${e?.message ?? e}</div>`;
+  }
+}
+
+function renderTap(t: TapRow): string {
+  const empty = !t.product;
+  if (empty) {
+    return `
+      <div class="tap-card tap-empty">
+        <div class="tap-head"><span class="tap-no">Кран ${t.tap_no}</span><span class="tap-status mono">пусто</span></div>
+        <div class="tap-empty-body">— нет кеги —</div>
+        <button class="tap-action tap-connect" data-tap="${t.tap_no}" data-action="connect">Подключить</button>
+      </div>`;
+  }
+  const pct = Math.max(0, Math.min(100, Number(t.pct ?? 0)));
+  const low = pct <= 15;
+  const mid = pct > 15 && pct <= 35;
+  const fillClass = low ? 'tap-fill-low' : mid ? 'tap-fill-mid' : 'tap-fill-ok';
+  return `
+    <div class="tap-card ${low ? 'tap-card-low' : ''}">
+      <div class="tap-head">
+        <span class="tap-no">Кран ${t.tap_no}</span>
+        <span class="tap-pct mono ${low ? 'tap-pct-low' : ''}">${pct}%</span>
+      </div>
+      <div class="tap-product">${t.product}</div>
+      <div class="tap-bar"><div class="tap-fill ${fillClass}" style="width:${pct}%"></div></div>
+      <div class="tap-nums mono">
+        <span>${fmtL(t.remaining_l)} / ${fmtL(t.volume_l)} л</span>
+        <span class="tap-poured">налито ${fmtL(t.poured_l)} л</span>
+      </div>
+      <div class="tap-foot">
+        <span class="tap-since mono">${t.connected_at ? 'с ' + fmtTapDate(t.connected_at) : ''}</span>
+        <div class="tap-foot-actions">
+          <button class="tap-action tap-replace" data-tap="${t.tap_no}" data-action="connect">Заменить</button>
+          <button class="tap-action tap-detach" data-tap="${t.tap_no}" data-action="detach">Снять</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function fmtL(v: number | null): string {
+  return rub.format(Math.round((Number(v ?? 0)) * 10) / 10);
+}
+function fmtTapDate(iso: string): string {
+  return new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+async function ensureTapsProducts() {
+  if (!abcClient || tapsProducts.length) return;
+  const { data, error } = await abcClient.rpc('keg_products', { p_location: tapsBar });
+  if (!error) tapsProducts = (data ?? []) as { product: string; total_l: number }[];
+}
+
+async function openKegForm(tapNo?: number) {
+  await ensureTapsProducts();
+  const taps = Array.from({ length: 20 }, (_, i) => i + 1);
+  const opts = tapsProducts.map((p) => `<option value="${p.product.replace(/"/g, '&quot;')}">${p.product}</option>`).join('');
+  const tapOpts = taps.map((n) => `<option value="${n}" ${n === tapNo ? 'selected' : ''}>Кран ${n}</option>`).join('');
+  const overlay = document.createElement('div');
+  overlay.className = 'keg-overlay';
+  overlay.innerHTML = `
+    <div class="keg-modal">
+      <div class="keg-modal-title">Подключить кегу · ${BAR_NAME[tapsBar]}</div>
+      <label class="keg-field"><span>Кран</span><select id="kegTap">${tapOpts}</select></label>
+      <label class="keg-field"><span>Сорт (розлив)</span><select id="kegProduct">${opts || '<option value="">нет розливных позиций</option>'}</select></label>
+      <label class="keg-field"><span>Объём, л</span><input id="kegVolume" type="number" inputmode="decimal" step="0.5" value="30" /></label>
+      <label class="keg-field"><span>Время подключения</span><input id="kegTime" type="datetime-local" /></label>
+      <div class="keg-modal-actions">
+        <button class="keg-cancel" id="kegCancel">Отмена</button>
+        <button class="keg-save" id="kegSave">Подключить</button>
+      </div>
+      <div class="keg-err" id="kegErr" hidden></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  // время по умолчанию = сейчас (локальное, формат для datetime-local)
+  const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  (overlay.querySelector('#kegTime') as HTMLInputElement).value = now;
+
+  const close = () => overlay.remove();
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector('#kegCancel')!.addEventListener('click', close);
+  overlay.querySelector('#kegSave')!.addEventListener('click', async () => {
+    const product = (overlay.querySelector('#kegProduct') as HTMLSelectElement).value;
+    const tap = Number((overlay.querySelector('#kegTap') as HTMLSelectElement).value);
+    const volume = Number((overlay.querySelector('#kegVolume') as HTMLInputElement).value);
+    const timeStr = (overlay.querySelector('#kegTime') as HTMLInputElement).value;
+    const err = overlay.querySelector('#kegErr') as HTMLElement;
+    if (!product || !volume || volume <= 0) { err.textContent = 'Заполните сорт и объём.'; err.hidden = false; return; }
+    const connectedAt = timeStr ? new Date(timeStr).toISOString() : new Date().toISOString();
+    const saveBtn = overlay.querySelector('#kegSave') as HTMLButtonElement;
+    saveBtn.disabled = true; saveBtn.textContent = '…';
+    const { error } = await abcClient!.rpc('keg_connect', {
+      p_location: tapsBar, p_tap: tap, p_product: product, p_volume: volume, p_connected_at: connectedAt,
+    });
+    if (error) { err.textContent = error.message; err.hidden = false; saveBtn.disabled = false; saveBtn.textContent = 'Подключить'; return; }
+    close(); loadTaps();
+  });
+}
+
+async function detachKeg(tapNo: number) {
+  if (!abcClient) return;
+  if (!confirm(`Снять кегу с крана ${tapNo}?`)) return;
+  const { error } = await abcClient.rpc('keg_detach', { p_location: tapsBar, p_tap: tapNo });
+  if (!error) loadTaps();
+}
+
 function initTabs(client: SupabaseClient) {
   abcClient = client;
   const tabs = document.getElementById('tabs')!;
@@ -322,8 +483,10 @@ function initTabs(client: SupabaseClient) {
       const which = btn.dataset.tab!;
       document.getElementById('tab-revenue')!.hidden = which !== 'revenue';
       document.getElementById('tab-abc')!.hidden = which !== 'abc';
+      document.getElementById('tab-taps')!.hidden = which !== 'taps';
       document.getElementById('tab-logs')!.hidden = which !== 'logs';
       if (which === 'abc' && !abcLoaded) loadAbc();
+      if (which === 'taps') { if (!tapsInited) initTapsTab(); loadTaps(); }
       if (which === 'logs') loadLogs();
     });
   });
