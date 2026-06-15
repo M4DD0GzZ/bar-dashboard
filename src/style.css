@@ -298,9 +298,10 @@ body {
 .abc-tr td { padding: 6px 9px; vertical-align: middle; }
 .abc-cls { width: 26px; }
 .abc-name { color: var(--ink); font-weight: 500; line-height: 1.25; }
-.abc-qty, .abc-rev, .abc-cum { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.abc-qty, .abc-rev, .abc-share, .abc-cum { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .abc-qty { color: var(--ink-dim); }
 .abc-rev { color: var(--ink); font-weight: 600; }
+.abc-share { color: var(--ink-dim); }
 .abc-cum { color: var(--ink-faint); }
 .abc-badge { display: inline-flex; align-items: center; justify-content: center;
   width: 19px; height: 19px; border-radius: 5px; font-size: 11px; font-weight: 700; }

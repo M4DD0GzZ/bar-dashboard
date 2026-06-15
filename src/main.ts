@@ -651,6 +651,11 @@ function renderLogRow(r: LogRow): string {
     </div>`;
 }
 
+type AbcRow = {
+  grp: string; product: string; qty: number; revenue: number;
+  share_pct: number; total_share_pct: number; cum_pct: number; abc: string;
+};
+
 async function loadAbc() {
   if (!abcClient) return;
   abcLoaded = true;
@@ -685,12 +690,13 @@ function abcTable(grp: string, rows: AbcRow[]): string {
       <td class="abc-name">${r.product}</td>
       <td class="abc-qty mono">${rub.format(Math.round(r.qty))}</td>
       <td class="abc-rev mono">${rub.format(Math.round(r.revenue))} ₽</td>
+      <td class="abc-share mono">${r.total_share_pct}%</td>
       <td class="abc-cum mono">${r.cum_pct}%</td>
     </tr>`).join('');
   return `
     <div class="abc-cell-sum mono">${rub.format(Math.round(total))} ₽ · A:${counts.A} B:${counts.B} C:${counts.C}</div>
     <table class="abc-table">
-      <thead><tr><th></th><th>Товар</th><th class="mono">шт</th><th class="mono">выручка</th><th class="mono">накоп.</th></tr></thead>
+      <thead><tr><th></th><th>Товар</th><th class="mono">шт</th><th class="mono">выручка</th><th class="mono">% общ</th><th class="mono">накоп.</th></tr></thead>
       <tbody>${body}</tbody>
     </table>`;
 }
