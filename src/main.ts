@@ -21,6 +21,7 @@ type Row = {
   food: number; snacks: number; other: number;            // today by group
   foodM: number; snacksM: number; otherM: number;         // month by group
   total: number; totalM: number;                          // all groups
+  totalYtd: number;                                       // year-to-date (с 1 января)
   totalYa: number; totalMYa: number;                      // year-ago: same day / MTD
   yaDate: string | null;                                  // the year-ago date compared
 };
@@ -52,6 +53,10 @@ function shell() {
         <div class="hero-col hero-col-month">
           <div class="hero-label mono">С начала месяца · вся</div>
           <div class="hero-num hero-num-sm"><span id="totalMonth">0</span><i>₽</i></div>
+        </div>
+        <div class="hero-col hero-col-year">
+          <div class="hero-label mono">С начала года · вся</div>
+          <div class="hero-num hero-num-sm"><span id="totalYtd">0</span><i>₽</i></div>
         </div>
       </div>
       <div class="hero-foot mono" id="heroFoot">—</div>
@@ -96,6 +101,7 @@ function mapRow(r: any): Row {
     food: Number(r.food_revenue), snacks: Number(r.snacks_revenue), other: Number(r.other_revenue),
     foodM: Number(r.food_month), snacksM: Number(r.snacks_month), otherM: Number(r.other_month),
     total: Number(r.total_revenue), totalM: Number(r.total_month),
+    totalYtd: Number(r.total_ytd ?? 0),
     totalYa: Number(r.total_revenue_ya ?? 0), totalMYa: Number(r.total_month_ya ?? 0),
     yaDate: r.ya_date ?? null,
   };
@@ -115,6 +121,7 @@ function paint(bumpId?: number) {
   const sorted = [...rows.values()].sort((a, b) => b.totalM - a.totalM);
   const total = sorted.reduce((s, r) => s + (r.total || 0), 0);
   const totalMonth = sorted.reduce((s, r) => s + (r.totalM || 0), 0);
+  const totalYtd = sorted.reduce((s, r) => s + (r.totalYtd || 0), 0);
   // YoY only across bars that have comparable history (ya MTD > 0)
   const totalMonthYa = sorted.reduce((s, r) => s + (r.totalMYa > 0 ? r.totalMYa : 0), 0);
   const totalMonthCmp = sorted.reduce((s, r) => s + (r.totalMYa > 0 ? r.totalM : 0), 0);
@@ -122,6 +129,7 @@ function paint(bumpId?: number) {
 
   document.getElementById('total')!.textContent = rub.format(Math.round(total));
   document.getElementById('totalMonth')!.textContent = rub.format(Math.round(totalMonth));
+  document.getElementById('totalYtd')!.textContent = rub.format(Math.round(totalYtd));
 
   const cards = document.getElementById('cards')!;
   cards.innerHTML = sorted.map((r, i) => {
@@ -145,6 +153,10 @@ function paint(bumpId?: number) {
         <div class="card-month">
           <span class="card-month-val">${rub.format(Math.round(r.totalM))} ₽</span>
           <span class="card-month-lbl mono">за месяц · всё</span>
+        </div>
+        <div class="card-year">
+          <span class="card-year-val mono">${rub.format(Math.round(r.totalYtd))} ₽</span>
+          <span class="card-year-lbl mono">с начала года</span>
         </div>
         <div class="card-yoy">${yoyBadge(r.totalM, r.totalMYa)}</div>
         <div class="groups">
@@ -181,7 +193,7 @@ function fatal(msg: string) {
 async function load(client: SupabaseClient) {
   const { data, error } = await client
     .from('live_revenue_today')
-    .select('location_id, location_name, beer_revenue, beer_qty, month_revenue, month_qty, food_revenue, snacks_revenue, other_revenue, beer_month, food_month, snacks_month, other_month, total_revenue, total_month, total_revenue_ya, total_month_ya, ya_date');
+    .select('location_id, location_name, beer_revenue, beer_qty, month_revenue, month_qty, food_revenue, snacks_revenue, other_revenue, beer_month, food_month, snacks_month, other_month, total_revenue, total_month, total_ytd, total_revenue_ya, total_month_ya, ya_date');
   if (error) throw error;
   for (const r of data ?? []) rows.set(r.location_id, mapRow(r));
   lastUpdate = new Date();

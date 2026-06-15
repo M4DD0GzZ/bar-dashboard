@@ -215,3 +215,16 @@ body {
 .yoy-down { color: #ff6b6b; }
 .yoy-flat { color: var(--ink-faint); font-weight: 500; }
 .hero-foot .yoy { font-size: 12.5px; }
+
+/* ---- hero: year-to-date (third metric) ---- */
+.hero-col-year { padding-left: 36px; border-left: 1px solid var(--edge); }
+@media (max-width: 760px) {
+  .hero-col-year { padding-left: 0; border-left: none; padding-top: 14px;
+    border-top: 1px solid var(--edge); width: 100%; }
+}
+
+/* ---- card: year-to-date block ---- */
+.card-year { margin-top: 8px; display: flex; flex-direction: column; gap: 2px; }
+.card-year-val { font-size: 15px; font-weight: 600; color: var(--ink-dim);
+  letter-spacing: -.2px; font-variant-numeric: tabular-nums; }
+.card-year-lbl { font-size: 11px; color: var(--ink-faint); letter-spacing: .3px; }
