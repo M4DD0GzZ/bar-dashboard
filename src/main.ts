@@ -328,48 +328,65 @@ async function loadAbc() {
     const results = await Promise.all(
       BARS.map((b) => abcClient!.rpc('abc_analysis', { p_location: b.id, p_period: abcPeriod }))
     );
-    const blocks: string[] = [];
-    results.forEach((res, i) => {
-      const bar = BARS[i];
-      if (res.error) { blocks.push(`<div class="abc-bar"><h2 class="abc-bar-name">${bar.name}</h2><div class="abc-hint mono">ошибка: ${res.error.message}</div></div>`); return; }
-      const rows = (res.data ?? []) as AbcRow[];
-      blocks.push(renderBar(bar.name, rows));
-    });
-    body.innerHTML = blocks.join('');
+    // rowsByBar[i] = строки ABC для BARS[i]
+    const rowsByBar: AbcRow[][] = results.map((res) => (res.error ? [] : ((res.data ?? []) as AbcRow[])));
+    const anyError = results.find((r) => r.error);
+    if (anyError?.error && rowsByBar.every((r) => r.length === 0)) {
+      body.innerHTML = `<div class="abc-hint mono">ошибка: ${anyError.error.message}</div>`;
+      return;
+    }
+    body.innerHTML = renderAbcGrid(rowsByBar);
   } catch (e: any) {
     body.innerHTML = `<div class="abc-hint mono">не удалось загрузить ABC: ${e?.message ?? e}</div>`;
   }
 }
 
-function renderBar(barName: string, rows: AbcRow[]): string {
-  if (!rows.length) return `<div class="abc-bar"><h2 class="abc-bar-name">${barName}</h2><div class="abc-hint mono">нет данных за период</div></div>`;
-  const groups = GRP_ORDER.filter((g) => rows.some((r) => r.grp === g)).map((g) => {
-    const items = rows.filter((r) => r.grp === g);
-    const total = items.reduce((s, r) => s + r.revenue, 0);
-    const counts = { A: 0, B: 0, C: 0 } as Record<string, number>;
-    items.forEach((r) => { counts[r.abc] = (counts[r.abc] || 0) + 1; });
-    const body = items.map((r) => `
-      <tr class="abc-tr abc-${r.abc}">
-        <td class="abc-cls"><span class="abc-badge abc-badge-${r.abc}">${r.abc}</span></td>
-        <td class="abc-name">${r.product}</td>
-        <td class="abc-qty mono">${rub.format(Math.round(r.qty))}</td>
-        <td class="abc-rev mono">${rub.format(Math.round(r.revenue))} ₽</td>
-        <td class="abc-share mono">${r.share_pct}%</td>
-        <td class="abc-cum mono">${r.cum_pct}%</td>
-      </tr>`).join('');
+// одна таблица товаров одного бара в одной группе
+function abcTable(rows: AbcRow[]): string {
+  if (!rows.length) return `<div class="abc-hint mono">нет данных</div>`;
+  const counts = { A: 0, B: 0, C: 0 } as Record<string, number>;
+  rows.forEach((r) => { counts[r.abc] = (counts[r.abc] || 0) + 1; });
+  const total = rows.reduce((s, r) => s + r.revenue, 0);
+  const body = rows.map((r) => `
+    <tr class="abc-tr abc-${r.abc}">
+      <td class="abc-cls"><span class="abc-badge abc-badge-${r.abc}">${r.abc}</span></td>
+      <td class="abc-name">${r.product}</td>
+      <td class="abc-rev mono">${rub.format(Math.round(r.revenue))} ₽</td>
+      <td class="abc-cum mono">${r.cum_pct}%</td>
+    </tr>`).join('');
+  return `
+    <div class="abc-cell-sum mono">${rub.format(Math.round(total))} ₽ · A:${counts.A} B:${counts.B} C:${counts.C}</div>
+    <table class="abc-table">
+      <thead><tr><th></th><th>Товар</th><th class="mono">выручка</th><th class="mono">накоп.</th></tr></thead>
+      <tbody>${body}</tbody>
+    </table>`;
+}
+
+// сетка: строки = группы (пиво/еда/снеки), колонки = бары
+function renderAbcGrid(rowsByBar: AbcRow[][]): string {
+  // шапка с названиями баров
+  const head = `
+    <div class="abc-grid-head">
+      <div class="abc-grid-corner"></div>
+      ${BARS.map((b) => `<div class="abc-grid-bar">${b.name}</div>`).join('')}
+    </div>`;
+
+  const groupRows = GRP_ORDER.map((g) => {
+    // есть ли вообще данные по этой группе хоть у одного бара
+    const present = rowsByBar.some((rows) => rows.some((r) => r.grp === g));
+    if (!present) return '';
+    const cells = rowsByBar.map((rows, bi) => {
+      const items = rows.filter((r) => r.grp === g);
+      return `<div class="abc-cell" data-bar="${BARS[bi].name}">${abcTable(items)}</div>`;
+    }).join('');
     return `
-      <div class="abc-grp">
-        <div class="abc-grp-head">
-          <span class="abc-grp-name"><i class="dot dot-${g}"></i>${GRP_LABEL[g]}</span>
-          <span class="abc-grp-sum mono">${rub.format(Math.round(total))} ₽ · A:${counts.A} B:${counts.B} C:${counts.C}</span>
-        </div>
-        <table class="abc-table">
-          <thead><tr><th></th><th>Товар</th><th class="mono">шт</th><th class="mono">выручка</th><th class="mono">доля</th><th class="mono">накоп.</th></tr></thead>
-          <tbody>${body}</tbody>
-        </table>
+      <div class="abc-grid-row">
+        <div class="abc-grid-label"><i class="dot dot-${g}"></i><span>${GRP_LABEL[g]}</span></div>
+        ${cells}
       </div>`;
   }).join('');
-  return `<div class="abc-bar"><h2 class="abc-bar-name">${barName}</h2>${groups}</div>`;
+
+  return `<div class="abc-grid">${head}${groupRows}</div>`;
 }
 
 function gate() {

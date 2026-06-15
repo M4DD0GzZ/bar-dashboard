@@ -264,38 +264,50 @@ body {
 .seg-btn:hover { color: var(--ink); }
 .seg-active { background: var(--amber); color: #1a1205; }
 
-/* ---- ABC bar block ---- */
-.abc-bar { margin-bottom: 34px; }
-.abc-bar-name { font-size: 18px; font-weight: 700; margin-bottom: 14px; letter-spacing: .2px; }
-.abc-grp { margin-bottom: 20px; background: var(--panel); border: 1px solid var(--edge-soft); border-radius: 14px; overflow: hidden; }
-.abc-grp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 13px 16px; border-bottom: 1px solid var(--edge-soft); flex-wrap: wrap; }
-.abc-grp-name { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; }
-.abc-grp-name .dot { width: 11px; height: 11px; border-radius: 3px; }
-.abc-grp-sum { font-size: 12.5px; color: var(--ink-dim); }
+/* ---- ABC grid: rows = groups, columns = bars ---- */
+.abc-grid { display: flex; flex-direction: column; gap: 10px; }
+/* единая колоночная разметка: ярлык группы слева + 3 бара */
+.abc-grid-head, .abc-grid-row {
+  display: grid; grid-template-columns: 132px repeat(3, 1fr); gap: 12px; align-items: start;
+}
+.abc-grid-head { position: sticky; top: 0; z-index: 1; padding-bottom: 6px;
+  background: var(--bg); border-bottom: 1px solid var(--edge); }
+.abc-grid-corner { }
+.abc-grid-bar { font-size: 15px; font-weight: 700; color: var(--ink); padding: 4px 2px; letter-spacing: .2px; }
+.abc-grid-row { padding-top: 8px; border-top: 1px solid var(--edge-soft); }
+.abc-grid-label { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600;
+  color: var(--ink); padding-top: 8px; position: sticky; }
+.abc-grid-label .dot { width: 11px; height: 11px; border-radius: 3px; flex: none; }
 
-/* ---- ABC table ---- */
-.abc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.abc-table thead th { text-align: left; color: var(--ink-faint); font-weight: 500; font-size: 11.5px;
-  padding: 8px 10px; text-transform: uppercase; letter-spacing: .4px; }
+.abc-cell { background: var(--panel); border: 1px solid var(--edge-soft); border-radius: 12px;
+  overflow: hidden; min-width: 0; }
+.abc-cell-sum { font-size: 10.5px; color: var(--ink-dim); padding: 8px 11px 6px;
+  border-bottom: 1px solid var(--edge-soft); }
+
+/* ---- ABC table (compact) ---- */
+.abc-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.abc-table thead th { text-align: left; color: var(--ink-faint); font-weight: 500; font-size: 10px;
+  padding: 6px 9px; text-transform: uppercase; letter-spacing: .3px; }
 .abc-table thead th.mono { text-align: right; }
 .abc-tr { border-top: 1px solid var(--edge-soft); }
-.abc-tr td { padding: 9px 10px; vertical-align: middle; }
-.abc-cls { width: 34px; }
-.abc-name { color: var(--ink); font-weight: 500; }
-.abc-qty, .abc-rev, .abc-share, .abc-cum { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.abc-tr td { padding: 6px 9px; vertical-align: middle; }
+.abc-cls { width: 26px; }
+.abc-name { color: var(--ink); font-weight: 500; line-height: 1.25; }
+.abc-rev, .abc-cum { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .abc-rev { color: var(--ink); font-weight: 600; }
-.abc-qty { color: var(--ink-dim); }
-.abc-share { color: var(--amber); }
 .abc-cum { color: var(--ink-faint); }
 .abc-badge { display: inline-flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; border-radius: 6px; font-size: 12px; font-weight: 700; }
+  width: 19px; height: 19px; border-radius: 5px; font-size: 11px; font-weight: 700; }
 .abc-badge-A { background: rgba(70,224,160,.16); color: var(--grow); }
 .abc-badge-B { background: rgba(255,180,58,.16); color: var(--amber); }
 .abc-badge-C { background: rgba(94,107,122,.18); color: var(--ink-dim); }
-.abc-hint { padding: 16px; color: var(--ink-faint); font-size: 13px; }
+.abc-hint { padding: 14px; color: var(--ink-faint); font-size: 12px; }
 
-@media (max-width: 640px) {
-  .abc-qty, .abc-share { display: none; }
-  .abc-table thead th:nth-child(3), .abc-table thead th:nth-child(5) { display: none; }
+/* на узких экранах сетка превращается в вертикальный поток: бар за баром */
+@media (max-width: 1000px) {
+  .abc-grid-head { display: none; }
+  .abc-grid-row { grid-template-columns: 1fr; gap: 8px; }
+  .abc-grid-label { padding-top: 4px; font-size: 15px; }
+  .abc-cell::before { content: attr(data-bar); display: block; font-size: 12px; color: var(--ink-dim);
+    padding: 6px 11px 0; }
 }
