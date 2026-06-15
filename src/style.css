@@ -266,21 +266,21 @@ body {
 
 /* ---- ABC grid: rows = groups, columns = bars ---- */
 .abc-grid { display: flex; flex-direction: column; gap: 10px; }
-/* единая колоночная разметка: ярлык группы слева + 3 бара */
+/* колоночная разметка: 3 бара (без левого ярлыка) */
 .abc-grid-head, .abc-grid-row {
-  display: grid; grid-template-columns: 132px repeat(3, 1fr); gap: 12px; align-items: start;
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; align-items: start;
 }
 .abc-grid-head { position: sticky; top: 0; z-index: 1; padding-bottom: 6px;
   background: var(--bg); border-bottom: 1px solid var(--edge); }
-.abc-grid-corner { }
-.abc-grid-bar { font-size: 15px; font-weight: 700; color: var(--ink); padding: 4px 2px; letter-spacing: .2px; }
+.abc-grid-bar { font-size: 16px; font-weight: 800; color: var(--ink); padding: 4px 2px;
+  letter-spacing: .2px; text-align: center; }
 .abc-grid-row { padding-top: 8px; border-top: 1px solid var(--edge-soft); }
-.abc-grid-label { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600;
-  color: var(--ink); padding-top: 8px; position: sticky; }
-.abc-grid-label .dot { width: 11px; height: 11px; border-radius: 3px; flex: none; }
 
 .abc-cell { background: var(--panel); border: 1px solid var(--edge-soft); border-radius: 12px;
   overflow: hidden; min-width: 0; }
+.abc-cell-head { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700;
+  color: var(--ink); padding: 11px 13px 9px; border-bottom: 1px solid var(--edge-soft); }
+.abc-cell-head .dot { width: 11px; height: 11px; border-radius: 3px; flex: none; }
 .abc-cell-sum { font-size: 10.5px; color: var(--ink-dim); padding: 8px 11px 6px;
   border-bottom: 1px solid var(--edge-soft); }
 
@@ -293,7 +293,8 @@ body {
 .abc-tr td { padding: 6px 9px; vertical-align: middle; }
 .abc-cls { width: 26px; }
 .abc-name { color: var(--ink); font-weight: 500; line-height: 1.25; }
-.abc-rev, .abc-cum { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.abc-qty, .abc-rev, .abc-cum { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.abc-qty { color: var(--ink-dim); }
 .abc-rev { color: var(--ink); font-weight: 600; }
 .abc-cum { color: var(--ink-faint); }
 .abc-badge { display: inline-flex; align-items: center; justify-content: center;
@@ -307,7 +308,6 @@ body {
 @media (max-width: 1000px) {
   .abc-grid-head { display: none; }
   .abc-grid-row { grid-template-columns: 1fr; gap: 8px; }
-  .abc-grid-label { padding-top: 4px; font-size: 15px; }
   .abc-cell::before { content: attr(data-bar); display: block; font-size: 12px; color: var(--ink-dim);
-    padding: 6px 11px 0; }
+    padding: 8px 13px 0; font-weight: 600; }
 }

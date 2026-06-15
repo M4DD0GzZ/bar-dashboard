@@ -55,6 +55,7 @@ function shell() {
           <div class="hero-col">
             <div class="hero-label mono">Сегодня · вся выручка</div>
             <div class="hero-num"><span id="total">0</span><i>₽</i></div>
+            <div class="hero-yoy" id="dayYoy"></div>
           </div>
           <div class="hero-col hero-col-month">
             <div class="hero-label mono">С начала месяца · вся</div>
@@ -142,6 +143,9 @@ function paint(bumpId?: number) {
   const total = sorted.reduce((s, r) => s + (r.total || 0), 0);
   const totalMonth = sorted.reduce((s, r) => s + (r.totalM || 0), 0);
   const totalYtd = sorted.reduce((s, r) => s + (r.totalYtd || 0), 0);
+  // day YoY: only bars with comparable history on that day a year ago
+  const totalDayYa = sorted.reduce((s, r) => s + (r.totalYa > 0 ? r.totalYa : 0), 0);
+  const totalDayCmp = sorted.reduce((s, r) => s + (r.totalYa > 0 ? r.total : 0), 0);
   // YoY only across bars that have comparable history (ya MTD > 0)
   const totalMonthYa = sorted.reduce((s, r) => s + (r.totalMYa > 0 ? r.totalMYa : 0), 0);
   const totalMonthCmp = sorted.reduce((s, r) => s + (r.totalMYa > 0 ? r.totalM : 0), 0);
@@ -173,6 +177,7 @@ function paint(bumpId?: number) {
           <span class="name">${r.name}</span>
         </div>
         <div class="amount">${rub.format(Math.round(r.total))}<i>₽</i><em class="amount-tag mono">сегодня</em></div>
+        <div class="card-yoy card-yoy-day">${yoyBadge(r.total, r.totalYa, 'в этот день год назад')}</div>
         <div class="rail rail-stack">
           ${seg(r.mrev, 'beer')}${seg(r.foodM, 'food')}${seg(r.snacksM, 'snacks')}${seg(r.otherM, 'other')}
         </div>
@@ -195,8 +200,10 @@ function paint(bumpId?: number) {
   }).join('');
 
   const hf = document.getElementById('heroFoot')!;
+  const dayYoyEl = document.getElementById('dayYoy')!;
   const monthYoyEl = document.getElementById('monthYoy')!;
   const yearYoyEl = document.getElementById('yearYoy')!;
+  dayYoyEl.innerHTML = totalDayYa > 0 ? yoyBadge(totalDayCmp, totalDayYa, 'в этот день год назад') : '';
   monthYoyEl.innerHTML = totalMonthYa > 0 ? yoyBadge(totalMonthCmp, totalMonthYa, 'в этом месяце год назад') : '';
   yearYoyEl.innerHTML = totalYtdYa > 0 ? yoyBadge(totalYtdCmp, totalYtdYa, 'за тот же период год назад') : '';
   const yearSplitEl = document.getElementById('yearSplit')!;
@@ -342,8 +349,9 @@ async function loadAbc() {
 }
 
 // одна таблица товаров одного бара в одной группе
-function abcTable(rows: AbcRow[]): string {
-  if (!rows.length) return `<div class="abc-hint mono">нет данных</div>`;
+function abcTable(grp: string, rows: AbcRow[]): string {
+  const head = `<div class="abc-cell-head"><i class="dot dot-${grp}"></i><span>${GRP_LABEL[grp]}</span></div>`;
+  if (!rows.length) return `${head}<div class="abc-hint mono">нет данных</div>`;
   const counts = { A: 0, B: 0, C: 0 } as Record<string, number>;
   rows.forEach((r) => { counts[r.abc] = (counts[r.abc] || 0) + 1; });
   const total = rows.reduce((s, r) => s + r.revenue, 0);
@@ -351,13 +359,15 @@ function abcTable(rows: AbcRow[]): string {
     <tr class="abc-tr abc-${r.abc}">
       <td class="abc-cls"><span class="abc-badge abc-badge-${r.abc}">${r.abc}</span></td>
       <td class="abc-name">${r.product}</td>
+      <td class="abc-qty mono">${rub.format(Math.round(r.qty))}</td>
       <td class="abc-rev mono">${rub.format(Math.round(r.revenue))} ₽</td>
       <td class="abc-cum mono">${r.cum_pct}%</td>
     </tr>`).join('');
   return `
+    ${head}
     <div class="abc-cell-sum mono">${rub.format(Math.round(total))} ₽ · A:${counts.A} B:${counts.B} C:${counts.C}</div>
     <table class="abc-table">
-      <thead><tr><th></th><th>Товар</th><th class="mono">выручка</th><th class="mono">накоп.</th></tr></thead>
+      <thead><tr><th></th><th>Товар</th><th class="mono">шт</th><th class="mono">выручка</th><th class="mono">накоп.</th></tr></thead>
       <tbody>${body}</tbody>
     </table>`;
 }
@@ -367,7 +377,6 @@ function renderAbcGrid(rowsByBar: AbcRow[][]): string {
   // шапка с названиями баров
   const head = `
     <div class="abc-grid-head">
-      <div class="abc-grid-corner"></div>
       ${BARS.map((b) => `<div class="abc-grid-bar">${b.name}</div>`).join('')}
     </div>`;
 
@@ -377,13 +386,9 @@ function renderAbcGrid(rowsByBar: AbcRow[][]): string {
     if (!present) return '';
     const cells = rowsByBar.map((rows, bi) => {
       const items = rows.filter((r) => r.grp === g);
-      return `<div class="abc-cell" data-bar="${BARS[bi].name}">${abcTable(items)}</div>`;
+      return `<div class="abc-cell" data-bar="${BARS[bi].name}">${abcTable(g, items)}</div>`;
     }).join('');
-    return `
-      <div class="abc-grid-row">
-        <div class="abc-grid-label"><i class="dot dot-${g}"></i><span>${GRP_LABEL[g]}</span></div>
-        ${cells}
-      </div>`;
+    return `<div class="abc-grid-row">${cells}</div>`;
   }).join('');
 
   return `<div class="abc-grid">${head}${groupRows}</div>`;
