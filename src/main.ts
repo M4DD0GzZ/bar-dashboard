@@ -37,37 +37,54 @@ function shell() {
       <div class="brand">
         <span class="mark"></span>
         <div>
-          <div class="title">Выручка за смену</div>
+          <div class="title">Аналитика баров</div>
           <div class="sub" id="today">—</div>
         </div>
       </div>
       <div class="conn" id="conn"><span class="led" id="led"></span><span id="connText" class="mono">соединение…</span></div>
     </header>
 
-    <section class="hero">
-      <div class="hero-row">
-        <div class="hero-col">
-          <div class="hero-label mono">Сегодня · вся выручка</div>
-          <div class="hero-num"><span id="total">0</span><i>₽</i></div>
+    <nav class="tabs" id="tabs">
+      <button class="tab tab-active" data-tab="revenue">Выручка за смену</button>
+      <button class="tab" data-tab="abc">ABC-анализ</button>
+    </nav>
+
+    <div id="tab-revenue" class="tab-panel">
+      <section class="hero">
+        <div class="hero-row">
+          <div class="hero-col">
+            <div class="hero-label mono">Сегодня · вся выручка</div>
+            <div class="hero-num"><span id="total">0</span><i>₽</i></div>
+          </div>
+          <div class="hero-col hero-col-month">
+            <div class="hero-label mono">С начала месяца · вся</div>
+            <div class="hero-num hero-num-sm"><span id="totalMonth">0</span><i>₽</i></div>
+            <div class="hero-yoy" id="monthYoy"></div>
+          </div>
+          <div class="hero-col hero-col-year">
+            <div class="hero-label mono">С начала года · вся</div>
+            <div class="hero-num hero-num-sm"><span id="totalYtd">0</span><i>₽</i></div>
+            <div class="hero-yoy" id="yearYoy"></div>
+            <div class="hero-split" id="yearSplit"></div>
+          </div>
         </div>
-        <div class="hero-col hero-col-month">
-          <div class="hero-label mono">С начала месяца · вся</div>
-          <div class="hero-num hero-num-sm"><span id="totalMonth">0</span><i>₽</i></div>
-          <div class="hero-yoy" id="monthYoy"></div>
-        </div>
-        <div class="hero-col hero-col-year">
-          <div class="hero-label mono">С начала года · вся</div>
-          <div class="hero-num hero-num-sm"><span id="totalYtd">0</span><i>₽</i></div>
-          <div class="hero-yoy" id="yearYoy"></div>
-          <div class="hero-split" id="yearSplit"></div>
+        <div class="hero-foot mono" id="heroFoot">—</div>
+      </section>
+
+      <section class="cards" id="cards"></section>
+
+      <footer class="foot mono" id="foot"></footer>
+    </div>
+
+    <div id="tab-abc" class="tab-panel" hidden>
+      <div class="abc-controls">
+        <div class="abc-period" id="abcPeriod">
+          <button class="seg-btn seg-active" data-period="month">Текущий месяц</button>
+          <button class="seg-btn" data-period="ytd">С начала года</button>
         </div>
       </div>
-      <div class="hero-foot mono" id="heroFoot">—</div>
-    </section>
-
-    <section class="cards" id="cards"></section>
-
-    <footer class="foot mono" id="foot"></footer>
+      <div class="abc-body" id="abcBody"><div class="abc-hint mono">загрузка…</div></div>
+    </div>
   `;
 }
 
@@ -259,6 +276,100 @@ async function startDashboard() {
 
   // relative-time ticker
   setInterval(tickFoot, 1000);
+
+  initTabs(client);
+}
+
+// ---- tabs + ABC analysis ----
+let abcClient: SupabaseClient | null = null;
+let abcLoaded = false;
+let abcPeriod: 'month' | 'ytd' = 'month';
+
+const BARS: { id: number; name: string }[] = [
+  { id: 1, name: 'Шоссе Энтузиастов' },
+  { id: 2, name: 'Строгино' },
+  { id: 3, name: 'Флакон' },
+];
+const GRP_LABEL: Record<string, string> = { beer: 'Пиво и сидр', food: 'Еда', snacks: 'Закуски' };
+const GRP_ORDER = ['beer', 'food', 'snacks'];
+
+function initTabs(client: SupabaseClient) {
+  abcClient = client;
+  const tabs = document.getElementById('tabs')!;
+  tabs.querySelectorAll<HTMLButtonElement>('.tab').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      tabs.querySelectorAll('.tab').forEach((b) => b.classList.remove('tab-active'));
+      btn.classList.add('tab-active');
+      const which = btn.dataset.tab!;
+      document.getElementById('tab-revenue')!.hidden = which !== 'revenue';
+      document.getElementById('tab-abc')!.hidden = which !== 'abc';
+      if (which === 'abc' && !abcLoaded) loadAbc();
+    });
+  });
+  const period = document.getElementById('abcPeriod')!;
+  period.querySelectorAll<HTMLButtonElement>('.seg-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      period.querySelectorAll('.seg-btn').forEach((b) => b.classList.remove('seg-active'));
+      btn.classList.add('seg-active');
+      abcPeriod = btn.dataset.period as 'month' | 'ytd';
+      loadAbc();
+    });
+  });
+}
+
+type AbcRow = { grp: string; product: string; qty: number; revenue: number; share_pct: number; cum_pct: number; abc: string };
+
+async function loadAbc() {
+  if (!abcClient) return;
+  abcLoaded = true;
+  const body = document.getElementById('abcBody')!;
+  body.innerHTML = `<div class="abc-hint mono">загрузка…</div>`;
+  try {
+    const results = await Promise.all(
+      BARS.map((b) => abcClient!.rpc('abc_analysis', { p_location: b.id, p_period: abcPeriod }))
+    );
+    const blocks: string[] = [];
+    results.forEach((res, i) => {
+      const bar = BARS[i];
+      if (res.error) { blocks.push(`<div class="abc-bar"><h2 class="abc-bar-name">${bar.name}</h2><div class="abc-hint mono">ошибка: ${res.error.message}</div></div>`); return; }
+      const rows = (res.data ?? []) as AbcRow[];
+      blocks.push(renderBar(bar.name, rows));
+    });
+    body.innerHTML = blocks.join('');
+  } catch (e: any) {
+    body.innerHTML = `<div class="abc-hint mono">не удалось загрузить ABC: ${e?.message ?? e}</div>`;
+  }
+}
+
+function renderBar(barName: string, rows: AbcRow[]): string {
+  if (!rows.length) return `<div class="abc-bar"><h2 class="abc-bar-name">${barName}</h2><div class="abc-hint mono">нет данных за период</div></div>`;
+  const groups = GRP_ORDER.filter((g) => rows.some((r) => r.grp === g)).map((g) => {
+    const items = rows.filter((r) => r.grp === g);
+    const total = items.reduce((s, r) => s + r.revenue, 0);
+    const counts = { A: 0, B: 0, C: 0 } as Record<string, number>;
+    items.forEach((r) => { counts[r.abc] = (counts[r.abc] || 0) + 1; });
+    const body = items.map((r) => `
+      <tr class="abc-tr abc-${r.abc}">
+        <td class="abc-cls"><span class="abc-badge abc-badge-${r.abc}">${r.abc}</span></td>
+        <td class="abc-name">${r.product}</td>
+        <td class="abc-qty mono">${rub.format(Math.round(r.qty))}</td>
+        <td class="abc-rev mono">${rub.format(Math.round(r.revenue))} ₽</td>
+        <td class="abc-share mono">${r.share_pct}%</td>
+        <td class="abc-cum mono">${r.cum_pct}%</td>
+      </tr>`).join('');
+    return `
+      <div class="abc-grp">
+        <div class="abc-grp-head">
+          <span class="abc-grp-name"><i class="dot dot-${g}"></i>${GRP_LABEL[g]}</span>
+          <span class="abc-grp-sum mono">${rub.format(Math.round(total))} ₽ · A:${counts.A} B:${counts.B} C:${counts.C}</span>
+        </div>
+        <table class="abc-table">
+          <thead><tr><th></th><th>Товар</th><th class="mono">шт</th><th class="mono">выручка</th><th class="mono">доля</th><th class="mono">накоп.</th></tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>`;
+  }).join('');
+  return `<div class="abc-bar"><h2 class="abc-bar-name">${barName}</h2>${groups}</div>`;
 }
 
 function gate() {

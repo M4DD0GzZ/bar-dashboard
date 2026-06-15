@@ -240,3 +240,62 @@ body {
 .split-name { color: var(--ink-dim); font-size: 12.5px; letter-spacing: .2px; }
 .split-val { color: var(--ink); font-size: 13.5px; font-weight: 600;
   font-variant-numeric: tabular-nums; }
+
+/* ---- tabs ---- */
+.tabs { display: flex; gap: 4px; margin-bottom: 22px; border-bottom: 1px solid var(--edge); }
+.tab {
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  color: var(--ink-dim); font-size: 14.5px; font-weight: 600; padding: 11px 18px;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s;
+}
+.tab:hover { color: var(--ink); }
+.tab-active { color: var(--amber); border-bottom-color: var(--amber); }
+.tab-panel { animation: fade .25s ease; }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---- ABC controls ---- */
+.abc-controls { display: flex; justify-content: flex-end; margin-bottom: 18px; }
+.abc-period { display: inline-flex; background: var(--bg-soft); border: 1px solid var(--edge); border-radius: 11px; padding: 3px; gap: 3px; }
+.seg-btn {
+  background: none; border: none; cursor: pointer; font-family: inherit;
+  color: var(--ink-dim); font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: 8px;
+  transition: background .15s, color .15s;
+}
+.seg-btn:hover { color: var(--ink); }
+.seg-active { background: var(--amber); color: #1a1205; }
+
+/* ---- ABC bar block ---- */
+.abc-bar { margin-bottom: 34px; }
+.abc-bar-name { font-size: 18px; font-weight: 700; margin-bottom: 14px; letter-spacing: .2px; }
+.abc-grp { margin-bottom: 20px; background: var(--panel); border: 1px solid var(--edge-soft); border-radius: 14px; overflow: hidden; }
+.abc-grp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 13px 16px; border-bottom: 1px solid var(--edge-soft); flex-wrap: wrap; }
+.abc-grp-name { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; }
+.abc-grp-name .dot { width: 11px; height: 11px; border-radius: 3px; }
+.abc-grp-sum { font-size: 12.5px; color: var(--ink-dim); }
+
+/* ---- ABC table ---- */
+.abc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.abc-table thead th { text-align: left; color: var(--ink-faint); font-weight: 500; font-size: 11.5px;
+  padding: 8px 10px; text-transform: uppercase; letter-spacing: .4px; }
+.abc-table thead th.mono { text-align: right; }
+.abc-tr { border-top: 1px solid var(--edge-soft); }
+.abc-tr td { padding: 9px 10px; vertical-align: middle; }
+.abc-cls { width: 34px; }
+.abc-name { color: var(--ink); font-weight: 500; }
+.abc-qty, .abc-rev, .abc-share, .abc-cum { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.abc-rev { color: var(--ink); font-weight: 600; }
+.abc-qty { color: var(--ink-dim); }
+.abc-share { color: var(--amber); }
+.abc-cum { color: var(--ink-faint); }
+.abc-badge { display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 6px; font-size: 12px; font-weight: 700; }
+.abc-badge-A { background: rgba(70,224,160,.16); color: var(--grow); }
+.abc-badge-B { background: rgba(255,180,58,.16); color: var(--amber); }
+.abc-badge-C { background: rgba(94,107,122,.18); color: var(--ink-dim); }
+.abc-hint { padding: 16px; color: var(--ink-faint); font-size: 13px; }
+
+@media (max-width: 640px) {
+  .abc-qty, .abc-share { display: none; }
+  .abc-table thead th:nth-child(3), .abc-table thead th:nth-child(5) { display: none; }
+}
