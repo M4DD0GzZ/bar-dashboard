@@ -93,8 +93,10 @@ function shell() {
       <div class="taps-controls">
         <div class="taps-bars" id="tapsBars"></div>
         <div class="taps-actions">
-          <select class="taps-date-select" id="tapsChzDate"></select>
-          <button class="taps-chz-btn" id="tapsChzBtn">Документ ЧЗ</button>
+          <div class="chz-dropdown">
+            <button class="taps-chz-btn" id="tapsChzBtn">Документ ЧЗ ▾</button>
+            <div class="chz-menu" id="tapsChzMenu" hidden></div>
+          </div>
         </div>
       </div>
       <div class="taps-body" id="tapsBody"><div class="abc-hint mono">загрузка…</div></div>
@@ -347,19 +349,33 @@ function initTapsTab() {
       loadTaps();
     });
   });
-  // селектор даты: сегодня + 5 дней назад
-  const dateSel = document.getElementById('tapsChzDate') as HTMLSelectElement;
+  // кнопка «Документ ЧЗ» с выпадающим меню дат (сегодня + 5 дней назад)
+  const chzBtn = document.getElementById('tapsChzBtn')!;
+  const chzMenu = document.getElementById('tapsChzMenu')!;
   const today = new Date();
-  const opts: string[] = [];
+  const items: string[] = [];
   for (let i = 0; i < 6; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
     const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const label = i === 0 ? 'сегодня' : d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long' });
-    opts.push(`<option value="${iso}">${label}</option>`);
+    const label = i === 0 ? 'сегодня'
+      : i === 1 ? 'вчера'
+      : d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long' });
+    items.push(`<button class="chz-menu-item" data-date="${iso}" data-label="${label}">${label}</button>`);
   }
-  dateSel.innerHTML = opts.join('');
-  document.getElementById('tapsChzBtn')!.addEventListener('click', () => exportChz());
+  chzMenu.innerHTML = items.join('');
+  chzBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    chzMenu.hidden = !chzMenu.hidden;
+  });
+  chzMenu.querySelectorAll<HTMLButtonElement>('.chz-menu-item').forEach((it) => {
+    it.addEventListener('click', () => {
+      chzMenu.hidden = true;
+      exportChz(it.dataset.date!, it.dataset.label ?? '');
+    });
+  });
+  // закрытие меню по клику вне его
+  document.addEventListener('click', () => { chzMenu.hidden = true; });
 }
 
 async function loadTaps() {
@@ -478,12 +494,9 @@ function fmtTapDate(iso: string): string {
 
 // Выгрузка документа «Подключение кега» для Честного Знака:
 // xlsx с одной колонкой — коды маркировки (CIS) подключённых за день кег.
-async function exportChz() {
+async function exportChz(pickedDate: string, dateLabel: string) {
   if (!abcClient) return;
   const btn = document.getElementById('tapsChzBtn') as HTMLButtonElement;
-  const dateSel = document.getElementById('tapsChzDate') as HTMLSelectElement;
-  const pickedDate = dateSel?.value || undefined;          // YYYY-MM-DD
-  const dateLabel = dateSel?.selectedOptions[0]?.text ?? '';
   const prev = btn.textContent;
   btn.disabled = true; btn.textContent = 'Готовлю…';
   try {

@@ -371,9 +371,14 @@ body {
   font-size: 13px; padding: 10px 18px; border-radius: 10px; cursor: pointer; transition: opacity .15s; }
 .taps-add-btn:hover { opacity: .9; }
 .taps-actions { display: inline-flex; gap: 10px; align-items: center; }
-.taps-date-select { background: var(--panel); border: 1px solid var(--edge); color: var(--ink-dim);
-  font-family: inherit; font-size: 13px; padding: 9px 12px; border-radius: 10px; cursor: pointer; }
-.taps-date-select:hover { border-color: var(--ink-faint); }
+.chz-dropdown { position: relative; }
+.chz-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30;
+  background: var(--panel); border: 1px solid var(--edge); border-radius: 10px; padding: 5px;
+  min-width: 160px; box-shadow: 0 8px 24px rgba(0,0,0,.35); display: flex; flex-direction: column; gap: 2px; }
+.chz-menu[hidden] { display: none; }
+.chz-menu-item { background: none; border: none; color: var(--ink-dim); font-family: inherit; font-size: 13px;
+  text-align: left; padding: 9px 12px; border-radius: 7px; cursor: pointer; transition: background .12s, color .12s; }
+.chz-menu-item:hover { background: var(--edge-soft); color: var(--ink); }
 .taps-chz-btn { background: none; border: 1px solid var(--edge); color: var(--ink-dim); font-family: inherit;
   font-size: 13px; font-weight: 600; padding: 10px 16px; border-radius: 10px; cursor: pointer; transition: color .15s, border-color .15s; }
 .taps-chz-btn:hover { color: var(--ink); border-color: var(--ink-faint); }
