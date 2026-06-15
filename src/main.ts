@@ -47,6 +47,7 @@ function shell() {
     <nav class="tabs" id="tabs">
       <button class="tab tab-active" data-tab="revenue">Выручка за смену</button>
       <button class="tab" data-tab="abc">ABC-анализ</button>
+      <button class="tab" data-tab="logs">Логи <span class="tab-badge" id="logsBadge" hidden>0</span></button>
     </nav>
 
     <div id="tab-revenue" class="tab-panel">
@@ -85,6 +86,17 @@ function shell() {
         </div>
       </div>
       <div class="abc-body" id="abcBody"><div class="abc-hint mono">загрузка…</div></div>
+    </div>
+
+    <div id="tab-logs" class="tab-panel" hidden>
+      <div class="logs-controls">
+        <div class="logs-seg" id="logsFilter">
+          <button class="seg-btn seg-active" data-filter="unresolved">Активные</button>
+          <button class="seg-btn" data-filter="all">Все</button>
+        </div>
+        <button class="logs-refresh" id="logsRefresh" title="Обновить">↻</button>
+      </div>
+      <div class="logs-body" id="logsBody"><div class="abc-hint mono">загрузка…</div></div>
     </div>
   `;
 }
@@ -310,7 +322,9 @@ function initTabs(client: SupabaseClient) {
       const which = btn.dataset.tab!;
       document.getElementById('tab-revenue')!.hidden = which !== 'revenue';
       document.getElementById('tab-abc')!.hidden = which !== 'abc';
+      document.getElementById('tab-logs')!.hidden = which !== 'logs';
       if (which === 'abc' && !abcLoaded) loadAbc();
+      if (which === 'logs') loadLogs();
     });
   });
   const period = document.getElementById('abcPeriod')!;
@@ -322,9 +336,101 @@ function initTabs(client: SupabaseClient) {
       loadAbc();
     });
   });
+
+  const logsFilter = document.getElementById('logsFilter')!;
+  logsFilter.querySelectorAll<HTMLButtonElement>('.seg-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      logsFilter.querySelectorAll('.seg-btn').forEach((b) => b.classList.remove('seg-active'));
+      btn.classList.add('seg-active');
+      logsOnlyUnresolved = btn.dataset.filter === 'unresolved';
+      loadLogs();
+    });
+  });
+  document.getElementById('logsRefresh')!.addEventListener('click', () => loadLogs());
+
+  // фоновая проверка счётчика активных событий (раз в 60с)
+  refreshLogsBadge();
+  setInterval(refreshLogsBadge, 60000);
 }
 
-type AbcRow = { grp: string; product: string; qty: number; revenue: number; share_pct: number; cum_pct: number; abc: string };
+let logsOnlyUnresolved = true;
+
+const LOG_TYPE_LABEL: Record<string, string> = {
+  unclassified_product: 'Нет группы',
+};
+const BAR_NAME: Record<number, string> = { 1: 'Шоссе Энтузиастов', 2: 'Строгино', 3: 'Флакон' };
+
+type LogRow = {
+  id: number; event_type: string; severity: string; location_id: number | null;
+  message: string; details: Record<string, unknown>; resolved: boolean; created_at: string;
+};
+
+async function refreshLogsBadge() {
+  if (!abcClient) return;
+  try {
+    const { data, error } = await abcClient.rpc('ops_events_recent', { p_limit: 200, p_only_unresolved: true });
+    if (error) return;
+    const n = (data ?? []).length;
+    const badge = document.getElementById('logsBadge');
+    if (!badge) return;
+    if (n > 0) { badge.textContent = String(n); badge.hidden = false; }
+    else badge.hidden = true;
+  } catch { /* тихо: бейдж необязателен */ }
+}
+
+async function loadLogs() {
+  if (!abcClient) return;
+  const body = document.getElementById('logsBody')!;
+  body.innerHTML = `<div class="abc-hint mono">загрузка…</div>`;
+  try {
+    const { data, error } = await abcClient.rpc('ops_events_recent', {
+      p_limit: 200, p_only_unresolved: logsOnlyUnresolved,
+    });
+    if (error) { body.innerHTML = `<div class="abc-hint mono">ошибка: ${error.message}</div>`; return; }
+    const rows = (data ?? []) as LogRow[];
+    if (!rows.length) {
+      body.innerHTML = `<div class="logs-empty"><div class="logs-empty-mark">✓</div><div>Событий нет${logsOnlyUnresolved ? ' — всё разобрано' : ''}</div></div>`;
+      return;
+    }
+    body.innerHTML = rows.map(renderLogRow).join('');
+    body.querySelectorAll<HTMLButtonElement>('.log-resolve').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = Number(btn.dataset.id);
+        btn.disabled = true; btn.textContent = '…';
+        const { error: e } = await abcClient!.rpc('ops_event_resolve', { p_id: id });
+        if (e) { btn.disabled = false; btn.textContent = 'разобрать'; return; }
+        loadLogs(); refreshLogsBadge();
+      });
+    });
+  } catch (e: any) {
+    body.innerHTML = `<div class="abc-hint mono">не удалось загрузить логи: ${e?.message ?? e}</div>`;
+  }
+}
+
+function fmtLogTime(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function renderLogRow(r: LogRow): string {
+  const typeLabel = LOG_TYPE_LABEL[r.event_type] ?? r.event_type;
+  const bar = r.location_id != null ? (BAR_NAME[r.location_id] ?? `loc ${r.location_id}`) : '—';
+  const resolveBtn = r.resolved
+    ? `<span class="log-done mono">разобрано</span>`
+    : `<button class="log-resolve" data-id="${r.id}">разобрать</button>`;
+  return `
+    <div class="log-row log-${r.severity} ${r.resolved ? 'log-resolved' : ''}">
+      <div class="log-main">
+        <div class="log-line1">
+          <span class="log-type log-type-${r.severity}">${typeLabel}</span>
+          <span class="log-bar mono">${bar}</span>
+          <span class="log-time mono">${fmtLogTime(r.created_at)}</span>
+        </div>
+        <div class="log-msg">${r.message}</div>
+      </div>
+      <div class="log-actions">${resolveBtn}</div>
+    </div>`;
+}
 
 async function loadAbc() {
   if (!abcClient) return;
