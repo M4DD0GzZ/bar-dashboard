@@ -93,8 +93,8 @@ function shell() {
       <div class="taps-controls">
         <div class="taps-bars" id="tapsBars"></div>
         <div class="taps-actions">
-          <button class="taps-chz-btn" id="tapsChzBtn">Документ ЧЗ за день</button>
-          <button class="taps-add-btn" id="tapsAddBtn">+ Подключить кегу</button>
+          <select class="taps-date-select" id="tapsChzDate"></select>
+          <button class="taps-chz-btn" id="tapsChzBtn">Документ ЧЗ</button>
         </div>
       </div>
       <div class="taps-body" id="tapsBody"><div class="abc-hint mono">загрузка…</div></div>
@@ -327,7 +327,6 @@ const GRP_ORDER = ['beer', 'food', 'snacks'];
 // ---- Краны ----
 let tapsInited = false;
 let tapsBar = 1;                       // выбранный бар на вкладке
-let tapsProducts: { product: string; total_l: number }[] = [];
 
 type TapRow = {
   tap_no: number; product: string | null; volume_l: number | null;
@@ -343,13 +342,23 @@ function initTapsTab() {
   bars.querySelectorAll<HTMLButtonElement>('.taps-bar-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       tapsBar = Number(btn.dataset.bar);
-      tapsProducts = [];
       bars.querySelectorAll('.taps-bar-btn').forEach((b) => b.classList.remove('taps-bar-active'));
       btn.classList.add('taps-bar-active');
       loadTaps();
     });
   });
-  document.getElementById('tapsAddBtn')!.addEventListener('click', () => openKegForm());
+  // селектор даты: сегодня + 5 дней назад
+  const dateSel = document.getElementById('tapsChzDate') as HTMLSelectElement;
+  const today = new Date();
+  const opts: string[] = [];
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const label = i === 0 ? 'сегодня' : d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'long' });
+    opts.push(`<option value="${iso}">${label}</option>`);
+  }
+  dateSel.innerHTML = opts.join('');
   document.getElementById('tapsChzBtn')!.addEventListener('click', () => exportChz());
 }
 
@@ -367,14 +376,6 @@ async function loadTaps() {
          <div class="swaps-head">Журнал замен · ${BAR_NAME[tapsBar]}</div>
          <div class="swaps-body" id="swapsBody"><div class="abc-hint mono">загрузка…</div></div>
        </div>`;
-    body.querySelectorAll<HTMLButtonElement>('.tap-action').forEach((btn) => {
-      const tapNo = Number(btn.dataset.tap);
-      const action = btn.dataset.action;
-      btn.addEventListener('click', () => {
-        if (action === 'connect') openKegForm(tapNo);
-        else if (action === 'detach') detachKeg(tapNo);
-      });
-    });
     loadSwaps();
   } catch (e: any) {
     body.innerHTML = `<div class="abc-hint mono">не удалось загрузить краны: ${e?.message ?? e}</div>`;
@@ -444,7 +445,6 @@ function renderTap(t: TapRow): string {
       <div class="tap-card tap-empty">
         <div class="tap-head"><span class="tap-no">Кран ${t.tap_no}</span><span class="tap-status mono">пусто</span></div>
         <div class="tap-empty-body">— нет кеги —</div>
-        <button class="tap-action tap-connect" data-tap="${t.tap_no}" data-action="connect">Подключить</button>
       </div>`;
   }
   const pct = Math.max(0, Math.min(100, Number(t.pct ?? 0)));
@@ -465,10 +465,6 @@ function renderTap(t: TapRow): string {
       </div>
       <div class="tap-foot">
         <span class="tap-since mono">${t.connected_at ? 'с ' + fmtTapDate(t.connected_at) : ''}</span>
-        <div class="tap-foot-actions">
-          <button class="tap-action tap-replace" data-tap="${t.tap_no}" data-action="connect">Заменить</button>
-          <button class="tap-action tap-detach" data-tap="${t.tap_no}" data-action="detach">Снять</button>
-        </div>
       </div>
     </div>`;
 }
@@ -480,78 +476,22 @@ function fmtTapDate(iso: string): string {
   return new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
-async function ensureTapsProducts() {
-  if (!abcClient || tapsProducts.length) return;
-  const { data, error } = await abcClient.rpc('keg_products', { p_location: tapsBar });
-  if (!error) tapsProducts = (data ?? []) as { product: string; total_l: number }[];
-}
-
-async function openKegForm(tapNo?: number) {
-  await ensureTapsProducts();
-  const taps = Array.from({ length: 20 }, (_, i) => i + 1);
-  const opts = tapsProducts.map((p) => `<option value="${p.product.replace(/"/g, '&quot;')}">${p.product}</option>`).join('');
-  const tapOpts = taps.map((n) => `<option value="${n}" ${n === tapNo ? 'selected' : ''}>Кран ${n}</option>`).join('');
-  const overlay = document.createElement('div');
-  overlay.className = 'keg-overlay';
-  overlay.innerHTML = `
-    <div class="keg-modal">
-      <div class="keg-modal-title">Подключить кегу · ${BAR_NAME[tapsBar]}</div>
-      <label class="keg-field"><span>Кран</span><select id="kegTap">${tapOpts}</select></label>
-      <label class="keg-field"><span>Сорт (розлив)</span><select id="kegProduct">${opts || '<option value="">нет розливных позиций</option>'}</select></label>
-      <label class="keg-field"><span>Объём, л</span><input id="kegVolume" type="number" inputmode="decimal" step="0.5" value="30" /></label>
-      <label class="keg-field"><span>Время подключения</span><input id="kegTime" type="datetime-local" /></label>
-      <div class="keg-modal-actions">
-        <button class="keg-cancel" id="kegCancel">Отмена</button>
-        <button class="keg-save" id="kegSave">Подключить</button>
-      </div>
-      <div class="keg-err" id="kegErr" hidden></div>
-    </div>`;
-  document.body.appendChild(overlay);
-  // время по умолчанию = сейчас (локальное, формат для datetime-local)
-  const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-  (overlay.querySelector('#kegTime') as HTMLInputElement).value = now;
-
-  const close = () => overlay.remove();
-  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
-  overlay.querySelector('#kegCancel')!.addEventListener('click', close);
-  overlay.querySelector('#kegSave')!.addEventListener('click', async () => {
-    const product = (overlay.querySelector('#kegProduct') as HTMLSelectElement).value;
-    const tap = Number((overlay.querySelector('#kegTap') as HTMLSelectElement).value);
-    const volume = Number((overlay.querySelector('#kegVolume') as HTMLInputElement).value);
-    const timeStr = (overlay.querySelector('#kegTime') as HTMLInputElement).value;
-    const err = overlay.querySelector('#kegErr') as HTMLElement;
-    if (!product || !volume || volume <= 0) { err.textContent = 'Заполните сорт и объём.'; err.hidden = false; return; }
-    const connectedAt = timeStr ? new Date(timeStr).toISOString() : new Date().toISOString();
-    const saveBtn = overlay.querySelector('#kegSave') as HTMLButtonElement;
-    saveBtn.disabled = true; saveBtn.textContent = '…';
-    const { error } = await abcClient!.rpc('keg_connect', {
-      p_location: tapsBar, p_tap: tap, p_product: product, p_volume: volume, p_connected_at: connectedAt,
-    });
-    if (error) { err.textContent = error.message; err.hidden = false; saveBtn.disabled = false; saveBtn.textContent = 'Подключить'; return; }
-    close(); loadTaps();
-  });
-}
-
-async function detachKeg(tapNo: number) {
-  if (!abcClient) return;
-  if (!confirm(`Снять кегу с крана ${tapNo}?`)) return;
-  const { error } = await abcClient.rpc('keg_detach', { p_location: tapsBar, p_tap: tapNo });
-  if (!error) loadTaps();
-}
-
 // Выгрузка документа «Подключение кега» для Честного Знака:
 // xlsx с одной колонкой — коды маркировки (CIS) подключённых за день кег.
 async function exportChz() {
   if (!abcClient) return;
   const btn = document.getElementById('tapsChzBtn') as HTMLButtonElement;
+  const dateSel = document.getElementById('tapsChzDate') as HTMLSelectElement;
+  const pickedDate = dateSel?.value || undefined;          // YYYY-MM-DD
+  const dateLabel = dateSel?.selectedOptions[0]?.text ?? '';
   const prev = btn.textContent;
   btn.disabled = true; btn.textContent = 'Готовлю…';
   try {
-    const { data, error } = await abcClient.rpc('chz_codes_for_day', { p_location: tapsBar });
+    const { data, error } = await abcClient.rpc('chz_codes_for_day', { p_location: tapsBar, p_date: pickedDate });
     if (error) { alert('Ошибка выгрузки: ' + error.message); return; }
     const rows = (data ?? []) as { cis: string }[];
     const codes = rows.map((r) => r.cis).filter(Boolean);
-    if (!codes.length) { alert('За сегодня нет кег с кодом маркировки для этого бара.'); return; }
+    if (!codes.length) { alert(`За ${dateLabel} нет кег с кодом маркировки для этого бара.`); return; }
 
     // динамически подгружаем SheetJS из CDN (без постоянной зависимости)
     const XLSX = await import(/* @vite-ignore */ 'https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs');
@@ -560,9 +500,9 @@ async function exportChz() {
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Шаблон');
-    const today = new Date().toLocaleDateString('ru-RU').replace(/\./g, '-');
+    const fileDate = (pickedDate ?? '').split('-').reverse().join('-');
     const barName = BAR_NAME[tapsBar].replace(/\s+/g, '_');
-    XLSX.writeFile(wb, `Подключение_кег_${barName}_${today}.xlsx`);
+    XLSX.writeFile(wb, `Подключение_кег_${barName}_${fileDate}.xlsx`);
   } catch (e: any) {
     alert('Не удалось сформировать файл: ' + (e?.message ?? e));
   } finally {
