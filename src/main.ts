@@ -391,31 +391,46 @@ async function loadSwaps() {
   if (error) { el.innerHTML = `<div class="abc-hint mono">ошибка: ${error.message}</div>`; return; }
   const rows = (data ?? []) as SwapRow[];
   if (!rows.length) { el.innerHTML = `<div class="abc-hint mono">пока нет замен</div>`; return; }
-  el.innerHTML = rows.map(renderSwap).join('');
+
+  // группируем по дате (строки уже отсортированы по detached_at desc)
+  const groups: { date: string; rows: SwapRow[] }[] = [];
+  for (const r of rows) {
+    const d = fmtSwapDate(r.detached_at);
+    let g = groups[groups.length - 1];
+    if (!g || g.date !== d) { g = { date: d, rows: [] }; groups.push(g); }
+    g.rows.push(r);
+  }
+  el.innerHTML = groups.map((g) =>
+    `<div class="swap-day">
+       <div class="swap-day-head">${g.date}</div>
+       <div class="swap-day-rows">${g.rows.map(renderSwap).join('')}</div>
+     </div>`
+  ).join('');
 }
 
 function renderSwap(s: SwapRow): string {
   const pct = Number(s.remaining_pct ?? 0);
-  // чем больше остаток при снятии — тем больше недолив (потери)
-  const heavy = pct >= 30;
-  const mid = pct >= 15 && pct < 30;
-  const cls = heavy ? 'swap-heavy' : mid ? 'swap-mid' : 'swap-ok';
+  // недолив ≥10% — строка красная (потери), <10% — зелёная (кегу выработали)
+  const cls = pct >= 10 ? 'swap-red' : 'swap-green';
   return `
-    <div class="swap-row">
+    <div class="swap-row ${cls}">
       <div class="swap-main">
         <span class="swap-tap mono">Кран ${s.tap_no}</span>
         <span class="swap-product">${s.product}</span>
       </div>
       <div class="swap-nums mono">
-        <span class="swap-rem ${cls}">недолив ${fmtL(s.remaining_l)} л · ${pct}%</span>
+        <span class="swap-rem">недолив ${fmtL(s.remaining_l)} л · ${pct}%</span>
         <span class="swap-detail">продано ${fmtL(s.poured_l)} из ${fmtL(s.volume_l)} л</span>
-        <span class="swap-time">${fmtSwapTime(s.detached_at)}</span>
+        <span class="swap-time">${fmtSwapClock(s.detached_at)}</span>
       </div>
     </div>`;
 }
 
-function fmtSwapTime(iso: string): string {
-  return new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+function fmtSwapDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+function fmtSwapClock(iso: string): string {
+  return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 }
 
 function renderTap(t: TapRow): string {
