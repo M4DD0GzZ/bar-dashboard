@@ -31,6 +31,15 @@ let lastUpdate: Date | null = null;
 const rub = new Intl.NumberFormat('ru-RU');
 const app = document.getElementById('app')!;
 
+// сравнение: прошлый месяц (те же дни) и прошлый год (тот же период), по барам
+const cmp = new Map<number, { mp: number; yp: number }>();
+function cmpBadge(now: number, prev: number): string {
+  if (!prev || prev <= 0) return '';
+  const pct = Math.round(((now - prev) / prev) * 100);
+  const up = pct >= 0;
+  return `<span class="cmp ${up ? 'cmp-up' : 'cmp-down'} mono">${up ? '▲' : '▼'} ${pct > 0 ? '+' : ''}${pct}% · ${rub.format(Math.round(prev))} ₽</span>`;
+}
+
 function shell() {
   app.innerHTML = `
     <header class="bar">
@@ -46,37 +55,20 @@ function shell() {
 
     <nav class="tabs" id="tabs">
       <button class="tab tab-active" data-tab="revenue">Выручка за смену</button>
+      <button class="tab" data-tab="finance">Управленка</button>
       <button class="tab" data-tab="reports">Отчёты</button>
       <button class="tab" data-tab="taps">Краны</button>
       <button class="tab" data-tab="logs">Логи <span class="tab-badge" id="logsBadge" hidden>0</span></button>
     </nav>
 
     <div id="tab-revenue" class="tab-panel">
-      <section class="hero">
-        <div class="hero-row">
-          <div class="hero-col">
-            <div class="hero-label mono">Сегодня · вся выручка</div>
-            <div class="hero-num"><span id="total">0</span><i>₽</i></div>
-            <div class="hero-yoy" id="dayYoy"></div>
-          </div>
-          <div class="hero-col hero-col-month">
-            <div class="hero-label mono">С начала месяца · вся</div>
-            <div class="hero-num hero-num-sm"><span id="totalMonth">0</span><i>₽</i></div>
-            <div class="hero-yoy" id="monthYoy"></div>
-          </div>
-          <div class="hero-col hero-col-year">
-            <div class="hero-label mono">С начала года · вся</div>
-            <div class="hero-num hero-num-sm"><span id="totalYtd">0</span><i>₽</i></div>
-            <div class="hero-yoy" id="yearYoy"></div>
-            <div class="hero-split" id="yearSplit"></div>
-          </div>
-        </div>
-        <div class="hero-foot mono" id="heroFoot">—</div>
-      </section>
-
       <section class="cards" id="cards"></section>
 
       <footer class="foot mono" id="foot"></footer>
+    </div>
+
+    <div id="tab-finance" class="tab-panel" hidden>
+      <div class="finance-body" id="financeBody"><div class="abc-hint mono">загрузка…</div></div>
     </div>
 
     <div id="tab-reports" class="tab-panel" hidden>
@@ -160,38 +152,9 @@ function mapRow(r: any): Row {
   };
 }
 
-function yoyBadge(now: number, ya: number, label: string = 'год назад'): string {
-  // no comparable history (e.g. bar not yet open a year ago)
-  if (!ya || ya <= 0) return `<em class="yoy yoy-flat mono">нет данных год назад</em>`;
-  const pct = Math.round(((now - ya) / ya) * 100);
-  const cls = pct > 0 ? 'yoy-up' : pct < 0 ? 'yoy-down' : 'yoy-flat';
-  const arrow = pct > 0 ? '▲' : pct < 0 ? '▼' : '·';
-  const sign = pct > 0 ? '+' : '';
-  return `<em class="yoy ${cls} mono">${arrow} ${sign}${pct}% · ${rub.format(Math.round(ya))} ₽ ${label}</em>`;
-}
-
 function paint(bumpId?: number) {
   const sorted = [...rows.values()].sort((a, b) => b.totalM - a.totalM);
-  const total = sorted.reduce((s, r) => s + (r.total || 0), 0);
-  const totalMonth = sorted.reduce((s, r) => s + (r.totalM || 0), 0);
-  const totalYtd = sorted.reduce((s, r) => s + (r.totalYtd || 0), 0);
-  // day YoY: only bars with comparable history on that day a year ago
-  const totalDayYa = sorted.reduce((s, r) => s + (r.totalYa > 0 ? r.totalYa : 0), 0);
-  const totalDayCmp = sorted.reduce((s, r) => s + (r.totalYa > 0 ? r.total : 0), 0);
-  // YoY only across bars that have comparable history (ya MTD > 0)
-  const totalMonthYa = sorted.reduce((s, r) => s + (r.totalMYa > 0 ? r.totalMYa : 0), 0);
-  const totalMonthCmp = sorted.reduce((s, r) => s + (r.totalMYa > 0 ? r.totalM : 0), 0);
-  // same for the year (YTD): only bars with comparable history a year ago
-  const totalYtdYa = sorted.reduce((s, r) => s + (r.totalYtdYa > 0 ? r.totalYtdYa : 0), 0);
-  const totalYtdCmp = sorted.reduce((s, r) => s + (r.totalYtdYa > 0 ? r.totalYtd : 0), 0);
-  // YTD by legal entity: Хоп Сити Барс = Шоссе(1)+Строгино(2), Хоп Сити Концепт = Флакон(3)
-  const ytdBars = sorted.reduce((s, r) => s + (r.id === 1 || r.id === 2 ? r.totalYtd : 0), 0);
-  const ytdConcept = sorted.reduce((s, r) => s + (r.id === 3 ? r.totalYtd : 0), 0);
   const max = sorted.reduce((m, r) => Math.max(m, r.totalM || 0), 0) || 1;
-
-  document.getElementById('total')!.textContent = rub.format(Math.round(total));
-  document.getElementById('totalMonth')!.textContent = rub.format(Math.round(totalMonth));
-  document.getElementById('totalYtd')!.textContent = rub.format(Math.round(totalYtd));
 
   const cards = document.getElementById('cards')!;
   cards.innerHTML = sorted.map((r, i) => {
@@ -209,20 +172,17 @@ function paint(bumpId?: number) {
           <span class="name">${r.name}</span>
         </div>
         <div class="amount">${rub.format(Math.round(r.total))}<i>₽</i><em class="amount-tag mono">сегодня</em></div>
-        <div class="card-yoy card-yoy-day">${yoyBadge(r.total, r.totalYa, 'в этот день год назад')}</div>
         <div class="rail rail-stack">
           ${seg(r.mrev, 'beer')}${seg(r.foodM, 'food')}${seg(r.snacksM, 'snacks')}${seg(r.otherM, 'other')}
         </div>
         <div class="card-month">
-          <span class="card-month-val">${rub.format(Math.round(r.totalM))} ₽</span>
+          <span class="cmp-row"><span class="card-month-val">${rub.format(Math.round(r.totalM))} ₽</span>${cmpBadge(r.totalM, cmp.get(r.id)?.mp ?? 0)}</span>
           <span class="card-month-lbl mono">за месяц · всё</span>
         </div>
-        <div class="card-yoy">${yoyBadge(r.totalM, r.totalMYa, 'в этом месяце год назад')}</div>
         <div class="card-year">
-          <span class="card-year-val mono">${rub.format(Math.round(r.totalYtd))} ₽</span>
+          <span class="cmp-row"><span class="card-year-val mono">${rub.format(Math.round(r.totalYtd))} ₽</span>${cmpBadge(r.totalYtd, cmp.get(r.id)?.yp ?? 0)}</span>
           <span class="card-year-lbl mono">с начала года</span>
         </div>
-        <div class="card-yoy">${yoyBadge(r.totalYtd, r.totalYtdYa, 'за тот же период год назад')}</div>
         <div class="groups">
           ${grpRow('beer', 'Пиво и сидр', r.rev, r.mrev, r.total, r.totalM)}
           ${grpRow('food', 'Еда', r.food, r.foodM, r.total, r.totalM)}
@@ -230,23 +190,6 @@ function paint(bumpId?: number) {
         </div>
       </article>`;
   }).join('');
-
-  const hf = document.getElementById('heroFoot')!;
-  const dayYoyEl = document.getElementById('dayYoy')!;
-  const monthYoyEl = document.getElementById('monthYoy')!;
-  const yearYoyEl = document.getElementById('yearYoy')!;
-  dayYoyEl.innerHTML = totalDayYa > 0 ? yoyBadge(totalDayCmp, totalDayYa, 'в этот день год назад') : '';
-  monthYoyEl.innerHTML = totalMonthYa > 0 ? yoyBadge(totalMonthCmp, totalMonthYa, 'в этом месяце год назад') : '';
-  yearYoyEl.innerHTML = totalYtdYa > 0 ? yoyBadge(totalYtdCmp, totalYtdYa, 'за тот же период год назад') : '';
-  const yearSplitEl = document.getElementById('yearSplit')!;
-  yearSplitEl.innerHTML =
-    `<span class="split-row"><span class="split-name">Хоп Сити Барс</span><span class="split-val mono">${rub.format(Math.round(ytdBars))} ₽</span></span>` +
-    `<span class="split-row"><span class="split-name">Хоп Сити Концепт</span><span class="split-val mono">${rub.format(Math.round(ytdConcept))} ₽</span></span>`;
-  if (sorted.length) {
-    hf.innerHTML = `${sorted.length} бара · лидер месяца ${sorted[0].name}`;
-  } else {
-    hf.textContent = 'нет данных';
-  }
 }
 
 function tickFoot() {
@@ -270,6 +213,15 @@ async function load(client: SupabaseClient) {
   lastUpdate = new Date();
 }
 
+async function loadCompare(client: SupabaseClient) {
+  try {
+    const { data } = await client.rpc('bar_compare');
+    for (const c of (data ?? []) as any[]) {
+      cmp.set(Number(c.location_id), { mp: Number(c.month_prev), yp: Number(c.ytd_prev) });
+    }
+  } catch { /* сравнение необязательно */ }
+}
+
 async function startDashboard() {
   shell();
   document.getElementById('today')!.textContent = todayLabel();
@@ -285,6 +237,7 @@ async function startDashboard() {
 
   try {
     await load(client);
+    await loadCompare(client);
     paint();
     setConn('live', 'в эфире');
   } catch (e: any) {
@@ -538,9 +491,11 @@ function initTabs(client: SupabaseClient) {
       btn.classList.add('tab-active');
       const which = btn.dataset.tab!;
       document.getElementById('tab-revenue')!.hidden = which !== 'revenue';
+      document.getElementById('tab-finance')!.hidden = which !== 'finance';
       document.getElementById('tab-reports')!.hidden = which !== 'reports';
       document.getElementById('tab-taps')!.hidden = which !== 'taps';
       document.getElementById('tab-logs')!.hidden = which !== 'logs';
+      if (which === 'finance' && !financeLoaded) loadFinance();
       if (which === 'reports' && !abcLoaded) loadAbc();
       if (which === 'taps') { if (!tapsInited) initTapsTab(); loadTaps(); }
       if (which === 'logs') loadLogs();
@@ -725,6 +680,142 @@ function renderAbcGrid(rowsByBar: AbcRow[][]): string {
   }).join('');
 
   return `<div class="abc-grid">${head}${groupRows}</div>`;
+}
+
+// ---- Управленка: P&L, прогноз, денежный поток ----
+let financeLoaded = false;
+
+function mln(n: number): string {
+  return (Number(n) / 1e6).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' млн';
+}
+function monLabel(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString('ru-RU', { month: 'short', year: '2-digit' }).replace('.', '');
+}
+
+async function loadFinance() {
+  if (!abcClient) return;
+  financeLoaded = true;
+  const body = document.getElementById('financeBody')!;
+  body.innerHTML = `<div class="abc-hint mono">загрузка…</div>`;
+  try {
+    const [sumRes, monRes, fcRes, entRes, cfRes] = await Promise.all([
+      abcClient.rpc('mgmt_summary'),
+      abcClient.rpc('mgmt_pnl_monthly'),
+      abcClient.rpc('mgmt_revenue_forecast'),
+      abcClient.rpc('mgmt_pnl_by_entity'),
+      abcClient.rpc('mgmt_cashflow'),
+    ]);
+    const err = [sumRes, monRes, fcRes, entRes, cfRes].find((r) => r.error);
+    if (err?.error) { body.innerHTML = `<div class="abc-hint mono">ошибка: ${err.error.message}</div>`; return; }
+    body.innerHTML = renderFinance(
+      (sumRes.data ?? [])[0],
+      (monRes.data ?? []) as any[],
+      (fcRes.data ?? []) as any[],
+      (entRes.data ?? []) as any[],
+      (cfRes.data ?? []) as any[],
+    );
+  } catch (e: any) {
+    body.innerHTML = `<div class="abc-hint mono">не удалось загрузить управленку: ${e?.message ?? e}</div>`;
+  }
+}
+
+function renderFinance(s: any, pnl: any[], fc: any[], ent: any[], cf: any[]): string {
+  if (!s) return `<div class="abc-hint mono">нет данных управленки</div>`;
+  const r = (n: any) => rub.format(Math.round(Number(n) || 0));
+
+  const summary = `
+    <section class="fin-kpis">
+      <div class="fin-kpi">
+        <div class="fin-kpi-lbl mono">Прогноз выручки · 12 мес</div>
+        <div class="fin-kpi-num">${mln(s.fc_revenue)}<i>₽</i></div>
+      </div>
+      <div class="fin-kpi">
+        <div class="fin-kpi-lbl mono">Чистая прибыль · 12 мес</div>
+        <div class="fin-kpi-num fin-pos">${mln(s.fc_net)}<i>₽</i></div>
+      </div>
+      <div class="fin-kpi">
+        <div class="fin-kpi-lbl mono">Налог УСН 15% · 12 мес</div>
+        <div class="fin-kpi-num fin-tax">${mln(s.fc_tax)}<i>₽</i></div>
+      </div>
+      <div class="fin-kpi">
+        <div class="fin-kpi-lbl mono">Себестоимость · 12 мес</div>
+        <div class="fin-kpi-num">${mln(s.fc_cogs)}<i>₽</i></div>
+      </div>
+    </section>`;
+
+  const caveat = `<div class="fin-caveat mono">⚠️ Постоянные расходы (аренда, ФОТ, коммуналка) ещё не заданы — чистая прибыль и маржа завышены. Налог УСН-15% уже учтён. Данные обновляются ежедневно.</div>`;
+
+  const entCards = `
+    <section class="fin-ents">
+      ${ent.map((e) => `
+        <article class="fin-ent">
+          <div class="fin-ent-name">${e.entity_name}</div>
+          <div class="fin-ent-row"><span class="mono fin-ent-lbl">выручка / год</span><span class="fin-ent-val">${r(e.revenue)} ₽</span></div>
+          <div class="fin-ent-row"><span class="mono fin-ent-lbl">валовая прибыль</span><span class="fin-ent-val">${r(e.gross_profit)} ₽</span></div>
+          <div class="fin-ent-row"><span class="mono fin-ent-lbl">налог УСН</span><span class="fin-ent-val fin-tax">${r(e.tax)} ₽</span></div>
+          <div class="fin-ent-row fin-ent-net"><span class="mono fin-ent-lbl">чистая прибыль</span><span class="fin-ent-val fin-pos">${r(e.net_profit)} ₽</span></div>
+        </article>`).join('')}
+    </section>`;
+
+  const maxFc = Math.max(...fc.map((x) => Number(x.total)), 1);
+  const chart = `
+    <section class="fin-block">
+      <div class="fin-block-head">Прогноз выручки по месяцам <em class="mono">сезонность учтена</em></div>
+      <div class="fc-chart">
+        ${fc.map((x) => {
+          const h = Math.max(4, Math.round(Number(x.total) / maxFc * 100));
+          return `<div class="fc-col" title="${monLabel(x.mon)}: ${r(x.total)} ₽">
+            <div class="fc-val mono">${(Number(x.total) / 1e6).toFixed(1)}</div>
+            <div class="fc-bar" style="height:${h}%"></div>
+            <div class="fc-lbl mono">${monLabel(x.mon)}</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="fc-axis mono">млн ₽ · по всем барам</div>
+    </section>`;
+
+  const rowsHtml = pnl.map((x) => `
+    <tr class="${x.is_forecast ? 'pnl-fc' : 'pnl-act'}">
+      <td>${monLabel(x.mon)}${x.is_forecast ? ' <em class="pnl-tag mono">прогноз</em>' : ''}</td>
+      <td class="mono">${r(x.revenue)}</td>
+      <td class="mono fin-dim">${r(x.cogs)}</td>
+      <td class="mono">${r(x.gross_profit)}</td>
+      <td class="mono fin-tax">${r(x.tax)}</td>
+      <td class="mono pnl-net">${r(x.net_profit)}</td>
+    </tr>`).join('');
+  const table = `
+    <section class="fin-block">
+      <div class="fin-block-head">P&amp;L помесячно · факт и прогноз</div>
+      <div class="pnl-wrap">
+        <table class="pnl-table">
+          <thead><tr><th>Месяц</th><th class="mono">Выручка</th><th class="mono">Себест.</th><th class="mono">Валовая</th><th class="mono">Налог</th><th class="mono">Чистая</th></tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </section>`;
+
+  const byEnt = new Map<string, any[]>();
+  for (const x of cf) { if (!byEnt.has(x.entity_name)) byEnt.set(x.entity_name, []); byEnt.get(x.entity_name)!.push(x); }
+  const cfCards = [...byEnt.entries()].map(([name, list]) => {
+    const last = list[list.length - 1];
+    const maxC = Math.max(...list.map((x) => Number(x.closing_cash)), 1);
+    const spark = list.map((x) =>
+      `<span class="cf-bar" style="height:${Math.max(4, Math.round(Number(x.closing_cash) / maxC * 100))}%" title="${monLabel(x.mon)}: ${r(x.closing_cash)} ₽"></span>`).join('');
+    return `<article class="fin-cf">
+      <div class="fin-ent-name">${name}</div>
+      <div class="cf-spark">${spark}</div>
+      <div class="cf-foot mono">накоплено к ${monLabel(last.mon)}: <b>${r(last.closing_cash)} ₽</b></div>
+    </article>`;
+  }).join('');
+  const cfBlock = `
+    <section class="fin-block">
+      <div class="fin-block-head">Денежный поток · накопленный остаток по юрлицам</div>
+      <div class="fin-cf-row">${cfCards}</div>
+      <div class="fin-caveat mono">Старт от 0 ₽ — задайте остаток на счетах, чтобы видеть реальный баланс.</div>
+    </section>`;
+
+  return summary + caveat + entCards + chart + table + cfBlock;
 }
 
 function gate() {
